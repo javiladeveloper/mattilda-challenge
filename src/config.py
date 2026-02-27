@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra env vars (POSTGRES_*, PGADMIN_*)
 
 
 @lru_cache
