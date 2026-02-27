@@ -1,5 +1,5 @@
 """
-AI Collection Agent - Intelligent billing assistant powered by Claude.
+AI Collection Agent - Intelligent billing assistant powered by OpenAI.
 
 This agent provides:
 1. Payment Risk Analysis - Predict likelihood of late payments
@@ -8,12 +8,12 @@ This agent provides:
 4. Executive Summaries - AI-generated reports with insights
 """
 
-from datetime import datetime, date
+import json
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from uuid import UUID
 
-import anthropic
+from openai import OpenAI
 
 from src.config import settings
 from src.ai.schemas import (
@@ -36,17 +36,17 @@ class CollectionAgent:
     """
     AI-powered collection agent for school billing management.
 
-    Uses Claude API to provide intelligent insights and automation
+    Uses OpenAI API to provide intelligent insights and automation
     for payment collection processes.
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize the agent with Anthropic API key."""
-        self.api_key = api_key or settings.anthropic_api_key
+        """Initialize the agent with OpenAI API key."""
+        self.api_key = api_key or settings.openai_api_key
         self.client = None
         if self.api_key:
-            self.client = anthropic.Anthropic(api_key=self.api_key)
-        self.model = "claude-sonnet-4-20250514"
+            self.client = OpenAI(api_key=self.api_key)
+        self.model = "gpt-4o"  # or "gpt-3.5-turbo" for lower cost
 
     def _is_available(self) -> bool:
         """Check if AI agent is available (API key configured)."""
@@ -63,7 +63,7 @@ class CollectionAgent:
         if not self._is_available():
             return self._fallback_risk_analysis(request)
 
-        # Build context for Claude
+        # Build context for OpenAI
         payment_history_text = "\n".join(
             [
                 f"- Invoice {p.invoice_id}: ${p.amount}, due {p.due_date}, "
@@ -103,15 +103,14 @@ Provide your analysis in the following JSON format:
 Respond ONLY with the JSON, no additional text."""
 
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+                response_format={"type": "json_object"},
             )
 
-            import json
-
-            result = json.loads(response.content[0].text)
+            result = json.loads(response.choices[0].message.content)
 
             return RiskAnalysisResponse(
                 student_id=request.student_id,
@@ -123,7 +122,7 @@ Respond ONLY with the JSON, no additional text."""
                 suggested_action=result["suggested_action"],
                 analysis_summary=result["analysis_summary"],
             )
-        except Exception as e:
+        except Exception:
             # Fallback to rule-based analysis
             return self._fallback_risk_analysis(request)
 
@@ -137,14 +136,18 @@ Respond ONLY with the JSON, no additional text."""
 
         # Factor 1: Overdue amount
         if request.total_overdue > 0:
-            overdue_ratio = float(request.total_overdue / request.total_invoiced) if request.total_invoiced > 0 else 0
+            overdue_ratio = (
+                float(request.total_overdue / request.total_invoiced)
+                if request.total_invoiced > 0
+                else 0
+            )
             if overdue_ratio > 0.5:
                 risk_score += 40
                 risk_factors.append(
                     RiskFactor(
                         factor="Alto monto vencido",
                         impact="HIGH",
-                        description=f"Más del 50% del total facturado está vencido",
+                        description="Más del 50% del total facturado está vencido",
                     )
                 )
             elif overdue_ratio > 0.2:
@@ -153,7 +156,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Monto vencido significativo",
                         impact="MEDIUM",
-                        description=f"Entre 20-50% del total está vencido",
+                        description="Entre 20-50% del total está vencido",
                     )
                 )
             else:
@@ -162,7 +165,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Monto vencido menor",
                         impact="LOW",
-                        description=f"Menos del 20% está vencido",
+                        description="Menos del 20% está vencido",
                     )
                 )
 
@@ -176,7 +179,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Historial de pagos tardíos",
                         impact="HIGH",
-                        description=f"Más del 50% de pagos fueron tardíos",
+                        description="Más del 50% de pagos fueron tardíos",
                     )
                 )
             elif late_ratio > 0.2:
@@ -185,7 +188,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Algunos pagos tardíos",
                         impact="MEDIUM",
-                        description=f"Entre 20-50% de pagos fueron tardíos",
+                        description="Entre 20-50% de pagos fueron tardíos",
                     )
                 )
 
@@ -198,7 +201,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Alto porcentaje pendiente",
                         impact="HIGH",
-                        description=f"Más del 70% del total está pendiente de pago",
+                        description="Más del 70% del total está pendiente de pago",
                     )
                 )
 
@@ -215,16 +218,20 @@ Respond ONLY with the JSON, no additional text."""
         # Generate recommendations
         recommendations = []
         if risk_level in [RiskLevel.CRITICAL, RiskLevel.HIGH]:
-            recommendations.extend([
-                "Contactar inmediatamente al responsable de pago",
-                "Considerar plan de pagos",
-                "Revisar historial de comunicaciones previas",
-            ])
+            recommendations.extend(
+                [
+                    "Contactar inmediatamente al responsable de pago",
+                    "Considerar plan de pagos",
+                    "Revisar historial de comunicaciones previas",
+                ]
+            )
         elif risk_level == RiskLevel.MEDIUM:
-            recommendations.extend([
-                "Enviar recordatorio de pago",
-                "Ofrecer opciones de pago flexibles",
-            ])
+            recommendations.extend(
+                [
+                    "Enviar recordatorio de pago",
+                    "Ofrecer opciones de pago flexibles",
+                ]
+            )
         else:
             recommendations.append("Mantener comunicación regular")
 
@@ -290,20 +297,17 @@ Responde en formato JSON:
     "subject": "asunto del correo (solo para EMAIL, null para otros)",
     "message": "el mensaje completo",
     "call_to_action": "frase específica de llamado a acción"
-}}
-
-Responde SOLO con el JSON, sin texto adicional."""
+}}"""
 
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+                response_format={"type": "json_object"},
             )
 
-            import json
-
-            result = json.loads(response.content[0].text)
+            result = json.loads(response.choices[0].message.content)
 
             return CollectionMessageResponse(
                 subject=result.get("subject"),
@@ -394,7 +398,9 @@ Departamento de Cobranza
             message=message,
             tone_used=request.tone,
             channel=request.channel,
-            call_to_action="Realizar pago ahora" if request.include_payment_link else "Contactar administración",
+            call_to_action="Realizar pago ahora"
+            if request.include_payment_link
+            else "Contactar administración",
         )
 
     async def answer_question(self, request: AssistantRequest) -> AssistantResponse:
@@ -407,11 +413,10 @@ Departamento de Cobranza
             return self._fallback_assistant(request)
 
         # Build conversation history
-        messages = []
-        for msg in request.conversation_history[-5:]:  # Last 5 messages
-            messages.append({"role": msg.role, "content": msg.content})
-
-        system_prompt = """Eres un asistente virtual especializado en gestión de cobranza escolar para Mattilda.
+        messages = [
+            {
+                "role": "system",
+                "content": """Eres un asistente virtual especializado en gestión de cobranza escolar para Mattilda.
 Tu rol es ayudar a administradores, padres y personal de escuelas con consultas sobre:
 - Saldos de estudiantes
 - Facturas pendientes y vencidas
@@ -422,21 +427,23 @@ Tu rol es ayudar a administradores, padres y personal de escuelas con consultas 
 Responde siempre en español de manera profesional y clara.
 Si no tienes información específica, indica qué datos necesitarías.
 Siempre sugiere acciones concretas cuando sea apropiado."""
+                + (f"\n\nCONTEXTO ACTUAL:\n{request.context}" if request.context else ""),
+            }
+        ]
 
-        if request.context:
-            system_prompt += f"\n\nCONTEXTO ACTUAL:\n{request.context}"
+        for msg in request.conversation_history[-5:]:  # Last 5 messages
+            messages.append({"role": msg.role, "content": msg.content})
 
         messages.append({"role": "user", "content": request.question})
 
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1024,
-                system=system_prompt,
                 messages=messages,
+                max_tokens=1024,
             )
 
-            answer = response.content[0].text
+            answer = response.choices[0].message.content
 
             return AssistantResponse(
                 answer=answer,
@@ -495,7 +502,8 @@ Siempre sugiere acciones concretas cuando sea apropiado."""
             suggested_actions=actions,
             related_topics=["Cobranza", "Facturación", "Pagos"],
             confidence=0.7,
-            requires_human_followup="específico" in question_lower or "particular" in question_lower,
+            requires_human_followup="específico" in question_lower
+            or "particular" in question_lower,
         )
 
     async def generate_executive_summary(
@@ -533,22 +541,21 @@ Genera un resumen en formato JSON:
     ],
     "recommendations": ["recomendación 1", "recomendación 2", "recomendación 3"],
     "narrative_summary": "resumen narrativo de 3-4 oraciones"
-}}
-
-Responde SOLO con el JSON."""
+}}"""
 
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1500,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=1500,
+                response_format={"type": "json_object"},
             )
 
-            import json
+            result = json.loads(response.choices[0].message.content)
 
-            result = json.loads(response.content[0].text)
-
-            period_str = f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
+            period_str = (
+                f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
+            )
 
             return ExecutiveSummaryResponse(
                 title=result["title"],
@@ -573,7 +580,9 @@ Responde SOLO con el JSON."""
     ) -> ExecutiveSummaryResponse:
         """Fallback executive summary when AI is not available."""
         collection_rate = metrics.collection_rate * 100
-        period_str = f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
+        period_str = (
+            f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
+        )
 
         # Generate highlights
         highlights = [
@@ -587,7 +596,7 @@ Responde SOLO con el JSON."""
         if metrics.total_overdue > 0:
             concerns.append(f"Saldo vencido de ${metrics.total_overdue} requiere atención")
         if collection_rate < 80:
-            concerns.append(f"Tasa de cobranza por debajo del objetivo (80%)")
+            concerns.append("Tasa de cobranza por debajo del objetivo (80%)")
 
         # Generate recommendations
         recommendations = []
