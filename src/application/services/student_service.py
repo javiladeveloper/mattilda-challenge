@@ -38,6 +38,13 @@ class StudentService:
             raise EntityNotFoundError("Student", student_id)
         return student
 
+    async def get_with_invoices(self, student_id: UUID) -> Student:
+        """Get student with all invoices and payments loaded."""
+        student = await self.repo.get_with_invoices(student_id)
+        if not student:
+            raise EntityNotFoundError("Student", student_id)
+        return student
+
     async def create(self, data: dict) -> Student:
         # Verify school exists
         school = await self.school_repo.get_by_id(data.get("school_id"))

@@ -13,7 +13,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from src.config import settings
 from src.ai.schemas import (
@@ -45,7 +45,7 @@ class CollectionAgent:
         self.api_key = api_key or settings.openai_api_key
         self.client = None
         if self.api_key:
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = AsyncOpenAI(api_key=self.api_key)
         self.model = "gpt-4o"  # or "gpt-3.5-turbo" for lower cost
 
     def _is_available(self) -> bool:
@@ -103,7 +103,7 @@ Provide your analysis in the following JSON format:
 Respond ONLY with the JSON, no additional text."""
 
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1024,
@@ -300,7 +300,7 @@ Responde en formato JSON:
 }}"""
 
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1024,
@@ -437,7 +437,7 @@ Siempre sugiere acciones concretas cuando sea apropiado."""
         messages.append({"role": "user", "content": request.question})
 
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=1024,
@@ -544,7 +544,7 @@ Genera un resumen en formato JSON:
 }}"""
 
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1500,
