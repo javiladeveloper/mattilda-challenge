@@ -3,7 +3,7 @@
 # ============================================
 # Stage 1: Builder
 # ============================================
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -13,14 +13,14 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN pip install poetry
+# Install Poetry and export plugin
+RUN pip install poetry poetry-plugin-export
 
 # Copy dependency files
 COPY pyproject.toml poetry.lock* ./
 
 # Export dependencies to requirements.txt (without dev dependencies)
-RUN poetry export -f requirements.txt --without-hashes --without dev > requirements.txt
+RUN poetry export -f requirements.txt --without-hashes --only main -o requirements.txt
 
 # Install dependencies
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
@@ -28,7 +28,7 @@ RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.t
 # ============================================
 # Stage 2: Production
 # ============================================
-FROM python:3.11-slim as production
+FROM python:3.11-slim AS production
 
 # Create non-root user for security
 RUN groupadd -r mattilda && useradd -r -g mattilda mattilda
