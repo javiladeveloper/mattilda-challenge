@@ -9,11 +9,37 @@ This agent provides:
 """
 
 import json
+import re
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Tuple
 
 from openai import AsyncOpenAI
+
+
+# Keywords related to school billing management
+ALLOWED_TOPICS = {
+    # Spanish keywords
+    "pago", "pagos", "factura", "facturas", "deuda", "deudas", "saldo", "saldos",
+    "cobro", "cobranza", "mensualidad", "cuota", "cuotas", "matrícula", "matricula",
+    "estudiante", "estudiantes", "alumno", "alumnos", "padre", "padres", "apoderado",
+    "escuela", "colegio", "instituto", "pensión", "pension", "mora", "morosidad",
+    "vencido", "vencida", "pendiente", "pendientes", "abono", "abonos", "recibo",
+    "estado de cuenta", "recordatorio", "notificación", "debe", "deben", "adeuda",
+    "pagar", "cobrar", "facturar", "total", "monto", "importe",
+    # English keywords (in case)
+    "payment", "invoice", "debt", "balance", "student", "school", "billing", "fee",
+    # Common variations
+    "cunto", "cuanto", "cuando", "reportes", "reporte", "informe",
+}
+
+# Phrases that indicate off-topic questions
+OFF_TOPIC_PATTERNS = [
+    r"chiste", r"broma", r"clima", r"tiempo", r"cocina", r"receta",
+    r"película", r"pelicula", r"música", r"musica", r"juego", r"jugar",
+    r"historia de", r"quién (fue|es|era)", r"quien (fue|es|era)",
+    r"capital de", r"presidente", r"futbol", r"fútbol", r"deportes",
+]
 
 from src.config import settings
 from src.ai.schemas import (
@@ -51,6 +77,45 @@ class CollectionAgent:
     def _is_available(self) -> bool:
         """Check if AI agent is available (API key configured)."""
         return self.client is not None
+
+    def _is_on_topic(self, question: str) -> Tuple[bool, str]:
+        """
+        Check if the question is related to school billing management.
+
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        question_lower = question.lower()
+
+        # Check for off-topic patterns first
+        for pattern in OFF_TOPIC_PATTERNS:
+            if re.search(pattern, question_lower):
+                return False, "La pregunta no está relacionada con gestión escolar o pagos."
+
+        # Check if any allowed topic keyword is present
+        words = re.findall(r'\w+', question_lower)
+        for word in words:
+            if word in ALLOWED_TOPICS:
+                return True, ""
+
+        # Check for common question patterns about the system
+        system_patterns = [
+            r"(cómo|como) (funciona|usar|uso)",
+            r"(qué|que) (puedo|puede)",
+            r"ayuda",
+            r"hola",  # Greetings are OK
+            r"gracias",
+        ]
+        for pattern in system_patterns:
+            if re.search(pattern, question_lower):
+                return True, ""
+
+        # If question is very short (likely a greeting or simple query), allow it
+        if len(words) <= 3:
+            return True, ""
+
+        # Default: reject if no billing-related keywords found
+        return False, "Por favor, realiza preguntas relacionadas con pagos, facturas, estudiantes o gestión escolar."
 
     async def analyze_payment_risk(
         self, request: RiskAnalysisRequest
@@ -409,6 +474,22 @@ Departamento de Cobranza
 
         Acts as a conversational assistant for billing inquiries.
         """
+        # Validate that the question is on-topic
+        is_valid, rejection_reason = self._is_on_topic(request.question)
+        if not is_valid:
+            return AssistantResponse(
+                answer=rejection_reason + "\n\nPuedo ayudarte con:\n"
+                "- Consultas sobre saldos y pagos\n"
+                "- Estado de cuenta de estudiantes\n"
+                "- Facturas pendientes y vencidas\n"
+                "- Procesos de cobranza\n"
+                "- Reportes financieros",
+                suggested_actions=["Consultar saldo", "Ver facturas pendientes"],
+                related_topics=["Pagos", "Facturación", "Cobranza"],
+                confidence=1.0,
+                requires_human_followup=False,
+            )
+
         if not self._is_available():
             return self._fallback_assistant(request)
 

@@ -126,7 +126,8 @@ class AIRateLimiter:
 
 
 # Global rate limiter instance
+# Restrictive limits: prevent abuse while allowing legitimate usage
 ai_rate_limiter = AIRateLimiter(
-    requests_per_minute=10,  # 10 requests per minute
-    requests_per_hour=100,   # 100 requests per hour
+    requests_per_minute=5,    # 5 requests per minute (prevents rapid spam)
+    requests_per_hour=50,     # 50 requests per hour (prevents sustained abuse)
 )
