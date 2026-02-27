@@ -430,6 +430,140 @@ Cache is invalidated on writes.
 - Token expiration configurable (default: 30 minutes)
 - User status checked on each request
 
+## Database Views
+
+The database includes pre-built views for common reporting queries. These views are exposed through the `/api/v1/reports/*` endpoints.
+
+### v_student_balance
+
+**Purpose:** Current financial balance for each student.
+
+| Column | Description |
+|--------|-------------|
+| student_id | Student UUID |
+| full_name | First + Last name |
+| school_name | School name |
+| total_invoices | Count of non-cancelled invoices |
+| total_invoiced | Sum of invoice amounts |
+| total_paid | Sum of payments |
+| balance_due | Amount still owed |
+| overdue_invoices | Count of overdue invoices |
+
+**API Endpoint:** `GET /api/v1/reports/students/balance`
+
+---
+
+### v_school_summary
+
+**Purpose:** Financial summary aggregated by school.
+
+| Column | Description |
+|--------|-------------|
+| school_id | School UUID |
+| school_name | School name |
+| total_students | Total enrolled students |
+| active_students | Currently active students |
+| total_invoiced | Sum of all invoices |
+| total_collected | Sum of all payments |
+| total_pending | Outstanding balance |
+| total_overdue | Amount past due date |
+
+**API Endpoint:** `GET /api/v1/reports/schools/summary`
+
+---
+
+### v_invoice_details
+
+**Purpose:** Complete invoice information with payment status.
+
+| Column | Description |
+|--------|-------------|
+| invoice_id | Invoice UUID |
+| description | Invoice description |
+| invoice_amount | Original amount |
+| status | Current status |
+| student_name | Student full name |
+| school_name | School name |
+| paid_amount | Amount paid so far |
+| pending_amount | Remaining balance |
+| days_overdue | Days past due date |
+
+**API Endpoint:** `GET /api/v1/reports/invoices/details`
+
+---
+
+### v_payment_history
+
+**Purpose:** Complete payment history with all related details.
+
+| Column | Description |
+|--------|-------------|
+| payment_id | Payment UUID |
+| payment_amount | Payment amount |
+| payment_date | Date of payment |
+| payment_method | CASH, BANK_TRANSFER, etc. |
+| reference | External reference number |
+| invoice_description | Related invoice |
+| student_name | Student who paid |
+| school_name | School receiving payment |
+
+**API Endpoint:** `GET /api/v1/reports/payments/history`
+
+---
+
+### v_overdue_invoices
+
+**Purpose:** All overdue invoices for collections follow-up.
+
+| Column | Description |
+|--------|-------------|
+| invoice_id | Invoice UUID |
+| days_overdue | Days past due date |
+| pending_amount | Amount still owed |
+| student_name | Student name |
+| student_email | Contact email |
+| school_name | School name |
+| school_phone | School contact |
+
+**API Endpoint:** `GET /api/v1/reports/invoices/overdue`
+
+---
+
+### v_daily_collections
+
+**Purpose:** Daily payment totals grouped by school and payment method.
+
+| Column | Description |
+|--------|-------------|
+| payment_date | Collection date |
+| school_name | School name |
+| payment_count | Number of payments |
+| total_collected | Total amount |
+| cash_amount | Cash payments |
+| transfer_amount | Bank transfers |
+| credit_card_amount | Credit card payments |
+
+**API Endpoint:** `GET /api/v1/reports/collections/daily`
+
+---
+
+### v_monthly_revenue
+
+**Purpose:** Monthly revenue statistics by school.
+
+| Column | Description |
+|--------|-------------|
+| month | Month (first day) |
+| school_name | School name |
+| students_with_payments | Unique students who paid |
+| payment_count | Total payments |
+| total_revenue | Sum of payments |
+| avg_payment_amount | Average payment |
+
+**API Endpoint:** `GET /api/v1/reports/revenue/monthly`
+
+---
+
 ## Future Considerations
 
 If extending this schema, consider:

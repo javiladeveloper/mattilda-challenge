@@ -202,6 +202,17 @@ docker-compose exec api python scripts/seed.py
 | POST | `/api/v1/payments` | Register payment |
 | GET | `/api/v1/payments/invoice/{id}` | Payments for invoice |
 
+### Reports (Database Views)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/reports/students/balance` | Student balances with debt |
+| GET | `/api/v1/reports/schools/summary` | School financial summary |
+| GET | `/api/v1/reports/invoices/details` | Detailed invoice info |
+| GET | `/api/v1/reports/invoices/overdue` | Overdue invoices for collections |
+| GET | `/api/v1/reports/payments/history` | Complete payment history |
+| GET | `/api/v1/reports/collections/daily` | Daily collections by school |
+| GET | `/api/v1/reports/revenue/monthly` | Monthly revenue statistics |
+
 ## Key Business Features
 
 ### 1. Student Debt Tracking
