@@ -36,8 +36,6 @@ class StudentRepository(BaseRepository[Student]):
         return result.scalar_one_or_none()
 
     async def get_student_financials(self, student_id: UUID) -> dict:
-        from src.infrastructure.database.models import Payment
-
         query = (
             select(Invoice)
             .options(selectinload(Invoice.payments))

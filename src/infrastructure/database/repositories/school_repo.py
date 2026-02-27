@@ -20,7 +20,7 @@ class SchoolRepository(BaseRepository[School]):
     async def get_student_count(self, school_id: UUID, active_only: bool = True) -> int:
         query = select(func.count()).select_from(Student).where(Student.school_id == school_id)
         if active_only:
-            query = query.where(Student.is_active == True)
+            query = query.where(Student.is_active.is_(True))
 
         result = await self.session.execute(query)
         return result.scalar_one()

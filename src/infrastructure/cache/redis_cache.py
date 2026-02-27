@@ -1,6 +1,5 @@
 import json
 from typing import Any, Optional
-from functools import lru_cache
 
 import redis.asyncio as redis
 

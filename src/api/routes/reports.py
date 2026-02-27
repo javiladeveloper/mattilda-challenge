@@ -1,12 +1,12 @@
 """Reports API endpoints - Exposes database views for analytics."""
 
-from typing import List, Optional, Any
+from typing import List, Optional
 from datetime import date
 from uuid import UUID
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 

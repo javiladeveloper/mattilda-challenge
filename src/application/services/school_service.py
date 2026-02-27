@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.infrastructure.database.models import School, Invoice, Student
+from src.infrastructure.database.models import School
 from src.infrastructure.database.repositories import SchoolRepository, InvoiceRepository
 from src.domain.exceptions import EntityNotFoundError
 from src.domain.enums import InvoiceStatus
