@@ -3,11 +3,13 @@
 from uuid import UUID
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_db
 from src.api.rate_limiter import ai_rate_limiter
+from src.api.auth.jwt import require_auth
+from src.api.auth.models import TokenData
 from src.ai.agent import CollectionAgent
 from src.ai.schemas import (
     RiskAnalysisRequest,
@@ -31,9 +33,9 @@ def get_agent() -> CollectionAgent:
     return CollectionAgent()
 
 
-async def check_rate_limit(request: Request) -> dict:
-    """Rate limit dependency for AI endpoints."""
-    return await ai_rate_limiter.check_rate_limit(request)
+async def check_rate_limit(current_user: TokenData = Depends(require_auth)) -> dict:
+    """Rate limit dependency for AI endpoints (per user)."""
+    return await ai_rate_limiter.check_rate_limit(current_user.user_id)
 
 
 # ============================================
@@ -49,7 +51,6 @@ async def check_rate_limit(request: Request) -> dict:
 )
 async def analyze_student_risk(
     student_id: UUID,
-    request: Request,
     db: AsyncSession = Depends(get_db),
     agent: CollectionAgent = Depends(get_agent),
     _rate_limit: dict = Depends(check_rate_limit),
@@ -131,7 +132,6 @@ async def analyze_student_risk(
 )
 async def generate_collection_message(
     msg_request: CollectionMessageRequest,
-    request: Request,
     agent: CollectionAgent = Depends(get_agent),
     _rate_limit: dict = Depends(check_rate_limit),
 ):
@@ -155,7 +155,6 @@ async def generate_collection_message(
 async def generate_student_collection_message(
     student_id: UUID,
     msg_request: CollectionMessageRequest,
-    request: Request,
     db: AsyncSession = Depends(get_db),
     agent: CollectionAgent = Depends(get_agent),
     _rate_limit: dict = Depends(check_rate_limit),
@@ -199,7 +198,6 @@ async def generate_student_collection_message(
 )
 async def ask_assistant(
     assistant_request: AssistantRequest,
-    request: Request,
     db: AsyncSession = Depends(get_db),
     agent: CollectionAgent = Depends(get_agent),
     _rate_limit: dict = Depends(check_rate_limit),
@@ -273,7 +271,6 @@ async def ask_assistant(
 )
 async def generate_executive_summary(
     summary_request: ExecutiveSummaryRequest,
-    request: Request,
     db: AsyncSession = Depends(get_db),
     agent: CollectionAgent = Depends(get_agent),
     _rate_limit: dict = Depends(check_rate_limit),

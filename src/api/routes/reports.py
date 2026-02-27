@@ -11,6 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_db
+from src.api.auth.jwt import require_auth
+from src.api.auth.models import TokenData
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -201,6 +203,7 @@ async def get_student_balances(
     only_with_debt: bool = Query(False, description="Only show students with balance > 0"),
     only_active: bool = Query(True, description="Only show active students"),
     db: AsyncSession = Depends(get_db),
+    _current_user: TokenData = Depends(require_auth),
 ):
     """Get balance summary for all students."""
     query = "SELECT * FROM v_student_balance WHERE 1=1"
@@ -232,6 +235,7 @@ async def get_student_balances(
 async def get_school_summaries(
     only_active: bool = Query(True, description="Only show active schools"),
     db: AsyncSession = Depends(get_db),
+    _current_user: TokenData = Depends(require_auth),
 ):
     """Get financial summary for all schools."""
     query = "SELECT * FROM v_school_summary"
@@ -255,12 +259,13 @@ async def get_school_summaries(
 async def get_invoice_details(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
     student_id: Optional[str] = Query(None, description="Filter by student ID"),
-    status: Optional[str] = Query(
+    invoice_status: Optional[str] = Query(
         None, description="Filter by status (PENDING, PARTIAL, PAID, OVERDUE, CANCELLED)"
     ),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Skip results"),
     db: AsyncSession = Depends(get_db),
+    _current_user: TokenData = Depends(require_auth),
 ):
     """Get detailed information for all invoices."""
     query = "SELECT * FROM v_invoice_details WHERE 1=1"
@@ -274,9 +279,9 @@ async def get_invoice_details(
         query += " AND student_id = :student_id"
         params["student_id"] = student_id
 
-    if status:
+    if invoice_status:
         query += " AND status = :status"
-        params["status"] = status
+        params["status"] = invoice_status
 
     query += " ORDER BY due_date DESC LIMIT :limit OFFSET :offset"
     params["limit"] = limit
@@ -301,6 +306,7 @@ async def get_payment_history(
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Skip results"),
     db: AsyncSession = Depends(get_db),
+    _current_user: TokenData = Depends(require_auth),
 ):
     """Get complete payment history."""
     query = "SELECT * FROM v_payment_history WHERE 1=1"
@@ -341,6 +347,7 @@ async def get_overdue_invoices(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
     min_days_overdue: int = Query(0, ge=0, description="Minimum days overdue"),
     db: AsyncSession = Depends(get_db),
+    _current_user: TokenData = Depends(require_auth),
 ):
     """Get all overdue invoices for collections."""
     query = "SELECT * FROM v_overdue_invoices WHERE days_overdue >= :min_days"
@@ -368,6 +375,7 @@ async def get_daily_collections(
     date_from: Optional[date] = Query(None, description="Filter from date"),
     date_to: Optional[date] = Query(None, description="Filter to date"),
     db: AsyncSession = Depends(get_db),
+    _current_user: TokenData = Depends(require_auth),
 ):
     """Get daily collection report."""
     query = "SELECT * FROM v_daily_collections WHERE 1=1"
@@ -402,6 +410,7 @@ async def get_monthly_revenue(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
     year: Optional[int] = Query(None, description="Filter by year"),
     db: AsyncSession = Depends(get_db),
+    _current_user: TokenData = Depends(require_auth),
 ):
     """Get monthly revenue report."""
     query = "SELECT * FROM v_monthly_revenue WHERE 1=1"

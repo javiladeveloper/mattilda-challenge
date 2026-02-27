@@ -1,13 +1,13 @@
 """
 Rate limiter for AI endpoints using Redis.
 
-Protects against abuse by limiting requests per IP/user.
+Protects against abuse by limiting requests per user.
 """
 
 from datetime import datetime
 from typing import Optional
 
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, status
 import redis.asyncio as redis
 
 from src.config import settings
@@ -18,6 +18,7 @@ class AIRateLimiter:
     Redis-based rate limiter for AI endpoints.
 
     Implements a sliding window rate limit to prevent abuse.
+    Rate limiting is done per authenticated user.
     """
 
     def __init__(
@@ -39,32 +40,24 @@ class AIRateLimiter:
             )
         return self._redis
 
-    def _get_client_id(self, request: Request) -> str:
-        """Get unique identifier for the client."""
-        # Use X-Forwarded-For if behind proxy, otherwise use client IP
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        if forwarded_for:
-            client_ip = forwarded_for.split(",")[0].strip()
-        else:
-            client_ip = request.client.host if request.client else "unknown"
-        return client_ip
-
-    async def check_rate_limit(self, request: Request) -> dict:
+    async def check_rate_limit(self, user_id: str) -> dict:
         """
-        Check if request is within rate limits.
+        Check if request is within rate limits for a user.
+
+        Args:
+            user_id: The authenticated user's ID
 
         Raises HTTPException 429 if rate limit exceeded.
         Returns rate limit info dict if allowed.
         """
-        client_id = self._get_client_id(request)
         now = datetime.utcnow()
 
         try:
             r = await self._get_redis()
 
-            # Keys for minute and hour windows
-            minute_key = f"ai_rate:{client_id}:minute:{now.strftime('%Y%m%d%H%M')}"
-            hour_key = f"ai_rate:{client_id}:hour:{now.strftime('%Y%m%d%H')}"
+            # Keys for minute and hour windows (per user)
+            minute_key = f"ai_rate:user:{user_id}:minute:{now.strftime('%Y%m%d%H%M')}"
+            hour_key = f"ai_rate:user:{user_id}:hour:{now.strftime('%Y%m%d%H')}"
 
             # Get current counts
             minute_count = await r.get(minute_key) or 0
