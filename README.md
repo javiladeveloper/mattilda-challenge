@@ -23,6 +23,7 @@ Backend system for school billing management built with FastAPI, PostgreSQL, and
 | Containerization | Docker + Docker Compose |
 | CI/CD | GitHub Actions |
 | Cloud | AWS ECS Fargate (simulated) |
+| AI Agent | OpenAI GPT-4o |
 
 ## Architecture
 
@@ -213,6 +214,18 @@ docker-compose exec api python scripts/seed.py
 | GET | `/api/v1/reports/collections/daily` | Daily collections by school |
 | GET | `/api/v1/reports/revenue/monthly` | Monthly revenue statistics |
 
+### AI Agent (Optional)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/ai/risk-analysis/{student_id}` | Analyze payment risk for student |
+| POST | `/api/v1/ai/collection-message` | Generate collection reminder message |
+| POST | `/api/v1/ai/collection-message/{student_id}` | Generate message with student data |
+| POST | `/api/v1/ai/assistant` | Conversational assistant for billing |
+| POST | `/api/v1/ai/executive-summary` | AI-generated executive report |
+| GET | `/api/v1/ai/status` | Check AI agent availability |
+
+> **Note**: AI endpoints work **with or without** an OpenAI API key. Without a key, the system uses rule-based fallback logic that provides functional (though less sophisticated) responses.
+
 ## Key Business Features
 
 ### 1. Student Debt Tracking
@@ -310,6 +323,84 @@ Detailed financial reports for schools and students.
 | Soft Deletes | Entities are deactivated, not deleted |
 | CI/CD Pipeline | GitHub Actions with tests and coverage |
 | AWS Infrastructure | CloudFormation template (simulated) |
+| **AI Agent** | Intelligent collection assistant (optional) |
+
+## AI Collection Agent (Optional Feature)
+
+The system includes an AI-powered collection agent that provides intelligent assistance for billing management. **This feature is completely optional** - the core system works perfectly without it.
+
+### Capabilities
+
+| Feature | Description |
+|---------|-------------|
+| **Risk Analysis** | Analyzes student payment history and predicts likelihood of late payments |
+| **Message Generator** | Creates personalized collection messages (Email, SMS, WhatsApp) |
+| **Assistant** | Conversational AI for billing inquiries |
+| **Executive Summary** | Generates reports with insights and recommendations |
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     AI Agent Request                         │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+              ┌───────────────┐
+              │ API Key Set?  │
+              └───────┬───────┘
+                      │
+           ┌──────────┴──────────┐
+           │                     │
+           ▼                     ▼
+    ┌─────────────┐       ┌─────────────┐
+    │  OpenAI     │       │  Fallback   │
+    │  GPT-4o     │       │  (Rules)    │
+    └─────────────┘       └─────────────┘
+           │                     │
+           └──────────┬──────────┘
+                      ▼
+              ┌───────────────┐
+              │   Response    │
+              └───────────────┘
+```
+
+### Configuration
+
+To enable AI features with OpenAI:
+
+```bash
+# In your .env file
+OPENAI_API_KEY=sk-your-api-key-here
+```
+
+Without the API key, the agent uses **rule-based fallback logic** that:
+- Calculates risk scores based on payment patterns
+- Generates template-based collection messages
+- Provides helpful responses for common questions
+
+### Example: Risk Analysis Response
+
+```json
+{
+  "student_id": "uuid",
+  "risk_level": "MEDIUM",
+  "risk_score": 45,
+  "risk_factors": [
+    {
+      "factor": "Algunos pagos tardíos",
+      "impact": "MEDIUM",
+      "description": "Entre 20-50% de pagos fueron tardíos"
+    }
+  ],
+  "recommendations": [
+    "Enviar recordatorio de pago",
+    "Ofrecer opciones de pago flexibles"
+  ],
+  "predicted_payment_probability": 0.55,
+  "suggested_action": "Enviar recordatorio de pago",
+  "analysis_summary": "El estudiante presenta un nivel de riesgo MEDIUM..."
+}
 
 ## Project Structure
 
@@ -467,6 +558,7 @@ The `.aws/` directory contains infrastructure-as-code for deploying to AWS:
 | `DEBUG` | Enable debug mode | true |
 | `CACHE_TTL` | Cache TTL in seconds | 300 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT expiration | 30 |
+| `OPENAI_API_KEY` | OpenAI API key (optional) | (empty - uses fallback) |
 
 ## Docker Services
 
