@@ -15,9 +15,7 @@ class PaymentRepository(BaseRepository[Payment]):
     async def get_by_invoice(
         self, invoice_id: UUID, skip: int = 0, limit: int = 100
     ) -> List[Payment]:
-        return await self.get_all(
-            skip=skip, limit=limit, filters={"invoice_id": invoice_id}
-        )
+        return await self.get_all(skip=skip, limit=limit, filters={"invoice_id": invoice_id})
 
     async def get_all_with_filters(
         self,

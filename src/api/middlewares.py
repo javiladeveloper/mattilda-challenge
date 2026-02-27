@@ -97,18 +97,10 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
     def get_metrics(self) -> dict:
         """Get current metrics."""
-        avg_duration = (
-            self.total_duration_ms / self.request_count
-            if self.request_count > 0
-            else 0
-        )
+        avg_duration = self.total_duration_ms / self.request_count if self.request_count > 0 else 0
         return {
             "total_requests": self.request_count,
             "total_errors": self.error_count,
-            "error_rate": (
-                self.error_count / self.request_count
-                if self.request_count > 0
-                else 0
-            ),
+            "error_rate": (self.error_count / self.request_count if self.request_count > 0 else 0),
             "avg_duration_ms": round(avg_duration, 2),
         }

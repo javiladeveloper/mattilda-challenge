@@ -18,9 +18,7 @@ class SchoolRepository(BaseRepository[School]):
         return await self.get_all(skip=skip, limit=limit, filters={"is_active": True})
 
     async def get_student_count(self, school_id: UUID, active_only: bool = True) -> int:
-        query = select(func.count()).select_from(Student).where(
-            Student.school_id == school_id
-        )
+        query = select(func.count()).select_from(Student).where(Student.school_id == school_id)
         if active_only:
             query = query.where(Student.is_active == True)
 

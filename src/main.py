@@ -29,6 +29,7 @@ async def redoc_html():
         redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.1.3/bundles/redoc.standalone.js",
     )
 
+
 # Middlewares
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(

@@ -87,9 +87,7 @@ async def list_invoice_payments(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
     skip = (page - 1) * page_size
-    payments = await payment_service.get_all(
-        skip=skip, limit=page_size, invoice_id=invoice_id
-    )
+    payments = await payment_service.get_all(skip=skip, limit=page_size, invoice_id=invoice_id)
     total = await payment_service.count(invoice_id=invoice_id)
     pages = math.ceil(total / page_size) if total > 0 else 1
 

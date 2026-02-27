@@ -78,6 +78,7 @@ class MockRedisCache(RedisCache):
 
     async def delete_pattern(self, pattern: str) -> int:
         import fnmatch
+
         pattern = pattern.replace("*", ".*")
         keys_to_delete = [k for k in self._store if fnmatch.fnmatch(k, pattern)]
         for k in keys_to_delete:

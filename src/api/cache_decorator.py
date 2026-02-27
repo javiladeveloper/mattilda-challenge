@@ -17,6 +17,7 @@ def cache_response(prefix: str, ttl: int = None):
         prefix: Cache key prefix (e.g., "school", "student")
         ttl: Time to live in seconds (default from settings)
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
@@ -56,6 +57,7 @@ def cache_response(prefix: str, ttl: int = None):
             return result
 
         return wrapper
+
     return decorator
 
 

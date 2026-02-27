@@ -24,13 +24,9 @@ class InvoiceService:
         status: InvoiceStatus = None,
     ) -> List[Invoice]:
         if student_id:
-            return await self.repo.get_by_student(
-                student_id, skip=skip, limit=limit, status=status
-            )
+            return await self.repo.get_by_student(student_id, skip=skip, limit=limit, status=status)
         if school_id:
-            return await self.repo.get_by_school(
-                school_id, skip=skip, limit=limit, status=status
-            )
+            return await self.repo.get_by_school(school_id, skip=skip, limit=limit, status=status)
         filters = {"status": status} if status else None
         return await self.repo.get_all(skip=skip, limit=limit, filters=filters)
 

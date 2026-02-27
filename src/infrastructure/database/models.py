@@ -31,6 +31,7 @@ from src.domain.enums import InvoiceStatus, PaymentMethod
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
+
     pass
 
 
@@ -61,6 +62,7 @@ class School(Base):
         - School cannot be hard deleted if it has students
         - Deactivating a school does not deactivate its students
     """
+
     __tablename__ = "schools"
     __table_args__ = (
         Index("ix_schools_is_active", "is_active"),
@@ -71,43 +73,33 @@ class School(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the school"
+        comment="Unique identifier for the school",
     )
     name: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-        comment="Name of the educational institution"
+        String(255), nullable=False, comment="Name of the educational institution"
     )
     address: Mapped[Optional[str]] = mapped_column(
-        String(500),
-        nullable=True,
-        comment="Physical address of the school"
+        String(500), nullable=True, comment="Physical address of the school"
     )
     phone: Mapped[Optional[str]] = mapped_column(
-        String(50),
-        nullable=True,
-        comment="Contact phone number"
+        String(50), nullable=True, comment="Contact phone number"
     )
     email: Mapped[Optional[str]] = mapped_column(
-        String(255),
-        nullable=True,
-        comment="Contact email address"
+        String(255), nullable=True, comment="Contact email address"
     )
     is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        comment="Soft delete flag: False means logically deleted"
+        Boolean, default=True, comment="Soft delete flag: False means logically deleted"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the record was created"
+        comment="Timestamp when the record was created",
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
-        comment="Timestamp when the record was last updated"
+        comment="Timestamp when the record was last updated",
     )
 
     # Relationships
@@ -115,7 +107,7 @@ class School(Base):
         "Student",
         back_populates="school",
         lazy="selectin",
-        doc="List of students enrolled in this school"
+        doc="List of students enrolled in this school",
     )
 
     def __repr__(self) -> str:
@@ -157,6 +149,7 @@ class Student(Base):
         - Deactivating a student does not affect their invoices
         - Student's financial summary includes all non-cancelled invoices
     """
+
     __tablename__ = "students"
     __table_args__ = (
         Index("ix_students_school_id", "school_id"),
@@ -168,67 +161,53 @@ class Student(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the student"
+        comment="Unique identifier for the student",
     )
     school_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("schools.id", ondelete="RESTRICT"),
         nullable=False,
-        comment="Reference to the school where student is enrolled"
+        comment="Reference to the school where student is enrolled",
     )
     first_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-        comment="Student's first name"
+        String(100), nullable=False, comment="Student's first name"
     )
     last_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-        comment="Student's last name"
+        String(100), nullable=False, comment="Student's last name"
     )
     email: Mapped[Optional[str]] = mapped_column(
-        String(255),
-        nullable=True,
-        comment="Student or parent/guardian email"
+        String(255), nullable=True, comment="Student or parent/guardian email"
     )
     grade: Mapped[Optional[str]] = mapped_column(
-        String(50),
-        nullable=True,
-        comment="Current grade or level (e.g., '5th Grade', 'Senior')"
+        String(50), nullable=True, comment="Current grade or level (e.g., '5th Grade', 'Senior')"
     )
     enrolled_at: Mapped[date] = mapped_column(
-        Date,
-        server_default=func.current_date(),
-        comment="Date when the student was enrolled"
+        Date, server_default=func.current_date(), comment="Date when the student was enrolled"
     )
     is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        comment="Soft delete flag: False means student has withdrawn"
+        Boolean, default=True, comment="Soft delete flag: False means student has withdrawn"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the record was created"
+        comment="Timestamp when the record was created",
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
-        comment="Timestamp when the record was last updated"
+        comment="Timestamp when the record was last updated",
     )
 
     # Relationships
     school: Mapped["School"] = relationship(
-        "School",
-        back_populates="students",
-        doc="The school where this student is enrolled"
+        "School", back_populates="students", doc="The school where this student is enrolled"
     )
     invoices: Mapped[List["Invoice"]] = relationship(
         "Invoice",
         back_populates="student",
         lazy="selectin",
-        doc="List of invoices for this student"
+        doc="List of invoices for this student",
     )
 
     @property
@@ -283,6 +262,7 @@ class Invoice(Base):
         - Cancelled invoices cannot receive payments
         - Status auto-updates based on payments
     """
+
     __tablename__ = "invoices"
     __table_args__ = (
         Index("ix_invoices_student_id", "student_id"),
@@ -295,57 +275,47 @@ class Invoice(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the invoice"
+        comment="Unique identifier for the invoice",
     )
     student_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("students.id", ondelete="RESTRICT"),
         nullable=False,
-        comment="Reference to the student being billed"
+        comment="Reference to the student being billed",
     )
     amount: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2),
-        nullable=False,
-        comment="Total invoice amount (max: 9,999,999,999.99)"
+        Numeric(12, 2), nullable=False, comment="Total invoice amount (max: 9,999,999,999.99)"
     )
-    due_date: Mapped[date] = mapped_column(
-        Date,
-        nullable=False,
-        comment="Payment due date"
-    )
+    due_date: Mapped[date] = mapped_column(Date, nullable=False, comment="Payment due date")
     status: Mapped[InvoiceStatus] = mapped_column(
         String(20),
         default=InvoiceStatus.PENDING,
-        comment="Invoice status: PENDING, PARTIAL, PAID, OVERDUE, CANCELLED"
+        comment="Invoice status: PENDING, PARTIAL, PAID, OVERDUE, CANCELLED",
     )
     description: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Description of the charge (e.g., 'March 2024 Tuition')"
+        Text, nullable=True, comment="Description of the charge (e.g., 'March 2024 Tuition')"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the invoice was created"
+        comment="Timestamp when the invoice was created",
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
-        comment="Timestamp when the invoice was last updated"
+        comment="Timestamp when the invoice was last updated",
     )
 
     # Relationships
     student: Mapped["Student"] = relationship(
-        "Student",
-        back_populates="invoices",
-        doc="The student this invoice belongs to"
+        "Student", back_populates="invoices", doc="The student this invoice belongs to"
     )
     payments: Mapped[List["Payment"]] = relationship(
         "Payment",
         back_populates="invoice",
         lazy="selectin",
-        doc="List of payments made against this invoice"
+        doc="List of payments made against this invoice",
     )
 
     @property
@@ -404,6 +374,7 @@ class Payment(Base):
         Once recorded, a payment cannot be modified - only reversed
         through a separate adjustment process (not implemented).
     """
+
     __tablename__ = "payments"
     __table_args__ = (
         Index("ix_payments_invoice_id", "invoice_id"),
@@ -415,45 +386,39 @@ class Payment(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        comment="Unique identifier for the payment"
+        comment="Unique identifier for the payment",
     )
     invoice_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("invoices.id", ondelete="RESTRICT"),
         nullable=False,
-        comment="Reference to the invoice being paid"
+        comment="Reference to the invoice being paid",
     )
     amount: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2),
-        nullable=False,
-        comment="Payment amount (must be positive)"
+        Numeric(12, 2), nullable=False, comment="Payment amount (must be positive)"
     )
     payment_date: Mapped[date] = mapped_column(
-        Date,
-        server_default=func.current_date(),
-        comment="Date when payment was received"
+        Date, server_default=func.current_date(), comment="Date when payment was received"
     )
     method: Mapped[PaymentMethod] = mapped_column(
         String(20),
         default=PaymentMethod.CASH,
-        comment="Payment method: CASH, BANK_TRANSFER, CREDIT_CARD, DEBIT_CARD, OTHER"
+        comment="Payment method: CASH, BANK_TRANSFER, CREDIT_CARD, DEBIT_CARD, OTHER",
     )
     reference: Mapped[Optional[str]] = mapped_column(
         String(255),
         nullable=True,
-        comment="External reference (check number, transaction ID, etc.)"
+        comment="External reference (check number, transaction ID, etc.)",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        comment="Timestamp when the payment was recorded"
+        comment="Timestamp when the payment was recorded",
     )
 
     # Relationships
     invoice: Mapped["Invoice"] = relationship(
-        "Invoice",
-        back_populates="payments",
-        doc="The invoice this payment is applied to"
+        "Invoice", back_populates="payments", doc="The invoice this payment is applied to"
     )
 
     def __repr__(self) -> str:

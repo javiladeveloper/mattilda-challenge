@@ -32,8 +32,10 @@ def convert_row_to_dict(row) -> dict:
 # Response Schemas
 # ============================================
 
+
 class StudentBalanceResponse(BaseModel):
     """Student balance summary."""
+
     student_id: str
     first_name: str
     last_name: str
@@ -58,6 +60,7 @@ class StudentBalanceResponse(BaseModel):
 
 class SchoolSummaryResponse(BaseModel):
     """School financial summary."""
+
     school_id: str
     school_name: str
     school_email: Optional[str]
@@ -80,6 +83,7 @@ class SchoolSummaryResponse(BaseModel):
 
 class InvoiceDetailResponse(BaseModel):
     """Detailed invoice information."""
+
     invoice_id: str
     description: Optional[str]
     invoice_amount: float
@@ -103,6 +107,7 @@ class InvoiceDetailResponse(BaseModel):
 
 class PaymentHistoryResponse(BaseModel):
     """Payment history record."""
+
     payment_id: str
     payment_amount: float
     payment_date: date
@@ -125,6 +130,7 @@ class PaymentHistoryResponse(BaseModel):
 
 class OverdueInvoiceResponse(BaseModel):
     """Overdue invoice for collections."""
+
     invoice_id: str
     description: Optional[str]
     invoice_amount: float
@@ -146,6 +152,7 @@ class OverdueInvoiceResponse(BaseModel):
 
 class DailyCollectionResponse(BaseModel):
     """Daily collection summary."""
+
     payment_date: date
     school_id: str
     school_name: str
@@ -163,6 +170,7 @@ class DailyCollectionResponse(BaseModel):
 
 class MonthlyRevenueResponse(BaseModel):
     """Monthly revenue summary."""
+
     month: date
     school_id: str
     school_name: str
@@ -181,17 +189,18 @@ class MonthlyRevenueResponse(BaseModel):
 # Endpoints
 # ============================================
 
+
 @router.get(
     "/students/balance",
     response_model=List[StudentBalanceResponse],
     summary="Get student balances",
-    description="Returns balance summary for all students including total invoiced, paid, and pending amounts."
+    description="Returns balance summary for all students including total invoiced, paid, and pending amounts.",
 )
 async def get_student_balances(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
     only_with_debt: bool = Query(False, description="Only show students with balance > 0"),
     only_active: bool = Query(True, description="Only show active students"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get balance summary for all students."""
     query = "SELECT * FROM v_student_balance WHERE 1=1"
@@ -218,11 +227,11 @@ async def get_student_balances(
     "/schools/summary",
     response_model=List[SchoolSummaryResponse],
     summary="Get school summaries",
-    description="Returns financial summary for all schools including totals and invoice counts."
+    description="Returns financial summary for all schools including totals and invoice counts.",
 )
 async def get_school_summaries(
     only_active: bool = Query(True, description="Only show active schools"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get financial summary for all schools."""
     query = "SELECT * FROM v_school_summary"
@@ -241,15 +250,17 @@ async def get_school_summaries(
     "/invoices/details",
     response_model=List[InvoiceDetailResponse],
     summary="Get invoice details",
-    description="Returns detailed information for all invoices including payment status."
+    description="Returns detailed information for all invoices including payment status.",
 )
 async def get_invoice_details(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
     student_id: Optional[str] = Query(None, description="Filter by student ID"),
-    status: Optional[str] = Query(None, description="Filter by status (PENDING, PARTIAL, PAID, OVERDUE, CANCELLED)"),
+    status: Optional[str] = Query(
+        None, description="Filter by status (PENDING, PARTIAL, PAID, OVERDUE, CANCELLED)"
+    ),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Skip results"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get detailed information for all invoices."""
     query = "SELECT * FROM v_invoice_details WHERE 1=1"
@@ -280,7 +291,7 @@ async def get_invoice_details(
     "/payments/history",
     response_model=List[PaymentHistoryResponse],
     summary="Get payment history",
-    description="Returns complete payment history with all related details."
+    description="Returns complete payment history with all related details.",
 )
 async def get_payment_history(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
@@ -289,7 +300,7 @@ async def get_payment_history(
     date_to: Optional[date] = Query(None, description="Filter to date"),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Skip results"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get complete payment history."""
     query = "SELECT * FROM v_payment_history WHERE 1=1"
@@ -324,12 +335,12 @@ async def get_payment_history(
     "/invoices/overdue",
     response_model=List[OverdueInvoiceResponse],
     summary="Get overdue invoices",
-    description="Returns all overdue invoices for collections follow-up."
+    description="Returns all overdue invoices for collections follow-up.",
 )
 async def get_overdue_invoices(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
     min_days_overdue: int = Query(0, ge=0, description="Minimum days overdue"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get all overdue invoices for collections."""
     query = "SELECT * FROM v_overdue_invoices WHERE days_overdue >= :min_days"
@@ -350,13 +361,13 @@ async def get_overdue_invoices(
     "/collections/daily",
     response_model=List[DailyCollectionResponse],
     summary="Get daily collections",
-    description="Returns daily collection totals grouped by school and payment method."
+    description="Returns daily collection totals grouped by school and payment method.",
 )
 async def get_daily_collections(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
     date_from: Optional[date] = Query(None, description="Filter from date"),
     date_to: Optional[date] = Query(None, description="Filter to date"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get daily collection report."""
     query = "SELECT * FROM v_daily_collections WHERE 1=1"
@@ -385,12 +396,12 @@ async def get_daily_collections(
     "/revenue/monthly",
     response_model=List[MonthlyRevenueResponse],
     summary="Get monthly revenue",
-    description="Returns monthly revenue statistics by school."
+    description="Returns monthly revenue statistics by school.",
 )
 async def get_monthly_revenue(
     school_id: Optional[str] = Query(None, description="Filter by school ID"),
     year: Optional[int] = Query(None, description="Filter by year"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get monthly revenue report."""
     query = "SELECT * FROM v_monthly_revenue WHERE 1=1"
