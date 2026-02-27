@@ -1,0 +1,308 @@
+name: CI/CD Pipeline - AWS Deployment
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: mattilda-backend
+  ECS_CLUSTER: mattilda-cluster
+  ECS_SERVICE: mattilda-api-service
+  ECS_TASK_DEFINITION: .aws/task-definition.json
+  CONTAINER_NAME: mattilda-api
+
+jobs:
+  # ============================================
+  # JOB 1: Lint and Code Quality
+  # ============================================
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install ruff black isort
+
+      - name: Run Ruff (linter)
+        run: ruff check src/ --ignore E501
+        continue-on-error: true
+
+      - name: Check formatting with Black
+        run: black --check src/ --line-length 100
+        continue-on-error: true
+
+  # ============================================
+  # JOB 2: Run Tests
+  # ============================================
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: mattilda
+          POSTGRES_PASSWORD: mattilda_secret
+          POSTGRES_DB: mattilda_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql+asyncpg://mattilda:mattilda_secret@localhost:5432/mattilda_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
+        run: |
+          poetry run pytest tests/ -v --cov=src --cov-report=xml --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+
+  # ============================================
+  # JOB 3: Build Docker Image
+  # ============================================
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      # SIMULATED: In real scenario, this would authenticate with AWS ECR
+      - name: "[SIMULATED] Configure AWS credentials"
+        run: |
+          echo "::notice::SIMULATED - Would configure AWS credentials"
+          echo "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY would be set here"
+
+      # SIMULATED: In real scenario, this would login to ECR
+      - name: "[SIMULATED] Login to Amazon ECR"
+        run: |
+          echo "::notice::SIMULATED - Would run: aws ecr get-login-password | docker login"
+          echo "ECR Login would happen here for region ${{ env.AWS_REGION }}"
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.prod
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run security scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
+
+      # SIMULATED: In real scenario, this would push to ECR
+      - name: "[SIMULATED] Push image to Amazon ECR"
+        run: |
+          echo "::notice::SIMULATED - Would push image to ECR"
+          echo "docker push ${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          echo "docker push ${{ env.ECR_REPOSITORY }}:latest"
+
+  # ============================================
+  # JOB 4: Deploy to Staging (develop branch)
+  # ============================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging-api.mattilda.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: "[SIMULATED] Configure AWS credentials"
+        run: |
+          echo "::notice::SIMULATED - AWS credentials configured for staging"
+
+      - name: "[SIMULATED] Download task definition"
+        run: |
+          echo "::notice::SIMULATED - Would download current task definition from ECS"
+          cat .aws/task-definition.json
+
+      - name: "[SIMULATED] Update task definition with new image"
+        run: |
+          echo "::notice::SIMULATED - Updating task definition with image:"
+          echo "  Image: ${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          echo "  Environment: staging"
+
+      - name: "[SIMULATED] Deploy to Amazon ECS Staging"
+        run: |
+          echo "::notice::SIMULATED - Deploying to ECS Staging"
+          echo "aws ecs update-service --cluster ${{ env.ECS_CLUSTER }}-staging --service ${{ env.ECS_SERVICE }} --force-new-deployment"
+          echo ""
+          echo "Deployment Details:"
+          echo "  Cluster: ${{ env.ECS_CLUSTER }}-staging"
+          echo "  Service: ${{ env.ECS_SERVICE }}"
+          echo "  Region: ${{ env.AWS_REGION }}"
+
+      - name: "[SIMULATED] Wait for service stability"
+        run: |
+          echo "::notice::SIMULATED - Waiting for ECS service to stabilize..."
+          sleep 5
+          echo "Service is stable!"
+
+      - name: "[SIMULATED] Run smoke tests"
+        run: |
+          echo "::notice::SIMULATED - Running smoke tests against staging"
+          echo "curl -f https://staging-api.mattilda.example.com/health"
+          echo '{"status": "healthy", "version": "1.0.0", "service": "mattilda-api"}'
+
+  # ============================================
+  # JOB 5: Deploy to Production (main branch)
+  # ============================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.mattilda.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: "[SIMULATED] Configure AWS credentials"
+        run: |
+          echo "::notice::SIMULATED - AWS credentials configured for production"
+
+      - name: "[SIMULATED] Create deployment backup"
+        run: |
+          echo "::notice::SIMULATED - Creating backup of current deployment"
+          echo "Backup created: backup-$(date +%Y%m%d-%H%M%S)"
+
+      - name: "[SIMULATED] Update task definition with new image"
+        run: |
+          echo "::notice::SIMULATED - Updating task definition with image:"
+          echo "  Image: ${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          echo "  Environment: production"
+
+      - name: "[SIMULATED] Deploy to Amazon ECS Production"
+        run: |
+          echo "::notice::SIMULATED - Deploying to ECS Production"
+          echo "aws ecs update-service --cluster ${{ env.ECS_CLUSTER }}-prod --service ${{ env.ECS_SERVICE }} --force-new-deployment"
+          echo ""
+          echo "Deployment Details:"
+          echo "  Cluster: ${{ env.ECS_CLUSTER }}-prod"
+          echo "  Service: ${{ env.ECS_SERVICE }}"
+          echo "  Region: ${{ env.AWS_REGION }}"
+          echo "  Image Tag: ${{ github.sha }}"
+
+      - name: "[SIMULATED] Wait for service stability"
+        run: |
+          echo "::notice::SIMULATED - Waiting for ECS service to stabilize..."
+          sleep 5
+          echo "Service is stable!"
+
+      - name: "[SIMULATED] Run production smoke tests"
+        run: |
+          echo "::notice::SIMULATED - Running smoke tests against production"
+          echo "curl -f https://api.mattilda.example.com/health"
+          echo '{"status": "healthy", "version": "1.0.0", "service": "mattilda-api"}'
+
+      - name: "[SIMULATED] Notify deployment success"
+        run: |
+          echo "::notice::SIMULATED - Sending Slack/Teams notification"
+          echo "Deployment successful!"
+          echo "  Environment: Production"
+          echo "  Version: ${{ github.sha }}"
+          echo "  Deployed by: ${{ github.actor }}"
+          echo "  Time: $(date)"
+
+  # ============================================
+  # JOB 6: Rollback (manual trigger)
+  # ============================================
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment:
+      name: production
+
+    steps:
+      - name: "[SIMULATED] Rollback to previous version"
+        run: |
+          echo "::notice::SIMULATED - Rolling back to previous deployment"
+          echo "aws ecs update-service --cluster ${{ env.ECS_CLUSTER }}-prod --service ${{ env.ECS_SERVICE }} --task-definition <previous-task-def>"
+          echo "Rollback completed!"

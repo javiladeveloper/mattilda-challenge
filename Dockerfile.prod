@@ -1,0 +1,67 @@
+# Production Dockerfile - Multi-stage build for smaller image
+
+# ============================================
+# Stage 1: Builder
+# ============================================
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install poetry
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock* ./
+
+# Export dependencies to requirements.txt (without dev dependencies)
+RUN poetry export -f requirements.txt --without-hashes --without dev > requirements.txt
+
+# Install dependencies
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+# ============================================
+# Stage 2: Production
+# ============================================
+FROM python:3.11-slim as production
+
+# Create non-root user for security
+RUN groupadd -r mattilda && useradd -r -g mattilda mattilda
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy wheels from builder
+COPY --from=builder /app/wheels /wheels
+COPY --from=builder /app/requirements.txt .
+
+# Install dependencies
+RUN pip install --no-cache /wheels/*
+
+# Copy application code
+COPY --chown=mattilda:mattilda src/ ./src/
+COPY --chown=mattilda:mattilda alembic/ ./alembic/
+COPY --chown=mattilda:mattilda alembic.ini .
+
+# Switch to non-root user
+USER mattilda
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run with gunicorn for production
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

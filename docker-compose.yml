@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mattilda-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://mattilda:mattilda_secret@db:5432/mattilda_db
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=mattilda-super-secret-key-change-in-production
+      - DEBUG=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - mattilda-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: mattilda-db
+    environment:
+      POSTGRES_USER: mattilda
+      POSTGRES_PASSWORD: mattilda_secret
+      POSTGRES_DB: mattilda_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mattilda -d mattilda_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mattilda-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: mattilda-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mattilda-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: mattilda-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@mattilda.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - mattilda-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  mattilda-network:
+    driver: bridge
