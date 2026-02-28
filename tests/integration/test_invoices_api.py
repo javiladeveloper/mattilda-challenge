@@ -10,9 +10,15 @@ class TestInvoicesCRUD:
 
     @pytest.fixture
     async def student_id(self, auth_client: AsyncClient) -> str:
-        """Create a school and student, return student ID."""
+        """Create a school, grade and student, return student ID."""
         school = await auth_client.post("/api/v1/schools", json={"name": "Invoice Test School"})
         school_id = school.json()["id"]
+
+        grade = await auth_client.post(
+            "/api/v1/grades",
+            json={"name": "Test Grade", "monthly_fee": 500.00, "school_id": school_id},
+        )
+        grade_id = grade.json()["id"]
 
         student = await auth_client.post(
             "/api/v1/students",
@@ -20,6 +26,7 @@ class TestInvoicesCRUD:
                 "first_name": "Invoice",
                 "last_name": "Student",
                 "school_id": school_id,
+                "grade_id": grade_id,
             },
         )
         return student.json()["id"]

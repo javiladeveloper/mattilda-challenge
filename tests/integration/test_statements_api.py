@@ -5,6 +5,15 @@ from datetime import date
 from httpx import AsyncClient
 
 
+async def create_grade_for_school(auth_client: AsyncClient, school_id: str, name: str = "Test Grade") -> str:
+    """Helper to create a grade for a school."""
+    response = await auth_client.post(
+        "/api/v1/grades",
+        json={"name": name, "monthly_fee": 500.00, "school_id": school_id},
+    )
+    return response.json()["id"]
+
+
 class TestSchoolStatement:
     """Test School account statement endpoint."""
 
@@ -33,10 +42,13 @@ class TestSchoolStatement:
         school = await auth_client.post("/api/v1/schools", json={"name": "Full Statement School"})
         school_id = school.json()["id"]
 
+        # Create grade
+        grade_id = await create_grade_for_school(auth_client, school_id)
+
         # Create student
         student = await auth_client.post(
             "/api/v1/students",
-            json={"first_name": "Test", "last_name": "Student", "school_id": school_id},
+            json={"first_name": "Test", "last_name": "Student", "school_id": school_id, "grade_id": grade_id},
         )
         student_id = student.json()["id"]
 
@@ -87,12 +99,16 @@ class TestStudentStatement:
     async def test_student_statement_empty(self, auth_client: AsyncClient):
         """Test statement for student with no invoices."""
         school = await auth_client.post("/api/v1/schools", json={"name": "Statement School"})
+        school_id = school.json()["id"]
+        grade_id = await create_grade_for_school(auth_client, school_id)
+
         student = await auth_client.post(
             "/api/v1/students",
             json={
                 "first_name": "No",
                 "last_name": "Invoices",
-                "school_id": school.json()["id"],
+                "school_id": school_id,
+                "grade_id": grade_id,
             },
         )
         student_id = student.json()["id"]
@@ -110,12 +126,16 @@ class TestStudentStatement:
     async def test_student_statement_with_payments(self, auth_client: AsyncClient):
         """Test statement showing invoices and payments."""
         school = await auth_client.post("/api/v1/schools", json={"name": "Pay School"})
+        school_id = school.json()["id"]
+        grade_id = await create_grade_for_school(auth_client, school_id)
+
         student = await auth_client.post(
             "/api/v1/students",
             json={
                 "first_name": "Paying",
                 "last_name": "Student",
-                "school_id": school.json()["id"],
+                "school_id": school_id,
+                "grade_id": grade_id,
             },
         )
         student_id = student.json()["id"]
