@@ -200,7 +200,7 @@ class MonthlyRevenueResponse(BaseModel):
     description="Returns balance summary for all students including total invoiced, paid, and pending amounts.",
 )
 async def get_student_balances(
-    school_id: Optional[str] = Query(None, description="Filter by school ID"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID"),
     only_with_debt: bool = Query(False, description="Only show students with balance > 0"),
     only_active: bool = Query(True, description="Only show active students"),
     db: AsyncSession = Depends(get_db),
@@ -212,7 +212,7 @@ async def get_student_balances(
 
     if school_id:
         query += " AND school_id = :school_id"
-        params["school_id"] = school_id
+        params["school_id"] = str(school_id)
 
     if only_with_debt:
         query += " AND balance_due > 0"
@@ -258,8 +258,8 @@ async def get_school_summaries(
     description="Returns detailed information for all invoices including payment status.",
 )
 async def get_invoice_details(
-    school_id: Optional[str] = Query(None, description="Filter by school ID"),
-    student_id: Optional[str] = Query(None, description="Filter by student ID"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID"),
+    student_id: Optional[UUID] = Query(None, description="Filter by student ID"),
     invoice_status: Optional[str] = Query(
         None, description="Filter by status (PENDING, PARTIAL, PAID, OVERDUE, CANCELLED)"
     ),
@@ -274,11 +274,11 @@ async def get_invoice_details(
 
     if school_id:
         query += " AND school_id = :school_id"
-        params["school_id"] = school_id
+        params["school_id"] = str(school_id)
 
     if student_id:
         query += " AND student_id = :student_id"
-        params["student_id"] = student_id
+        params["student_id"] = str(student_id)
 
     if invoice_status:
         query += " AND status = :status"
@@ -300,8 +300,8 @@ async def get_invoice_details(
     description="Returns complete payment history with all related details.",
 )
 async def get_payment_history(
-    school_id: Optional[str] = Query(None, description="Filter by school ID"),
-    student_id: Optional[str] = Query(None, description="Filter by student ID"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID"),
+    student_id: Optional[UUID] = Query(None, description="Filter by student ID"),
     date_from: Optional[date] = Query(None, description="Filter from date"),
     date_to: Optional[date] = Query(None, description="Filter to date"),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
@@ -315,11 +315,11 @@ async def get_payment_history(
 
     if school_id:
         query += " AND school_id = :school_id"
-        params["school_id"] = school_id
+        params["school_id"] = str(school_id)
 
     if student_id:
         query += " AND student_id = :student_id"
-        params["student_id"] = student_id
+        params["student_id"] = str(student_id)
 
     if date_from:
         query += " AND payment_date >= :date_from"
@@ -345,7 +345,7 @@ async def get_payment_history(
     description="Returns all overdue invoices for collections follow-up.",
 )
 async def get_overdue_invoices(
-    school_id: Optional[str] = Query(None, description="Filter by school ID"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID"),
     min_days_overdue: int = Query(0, ge=0, description="Minimum days overdue"),
     db: AsyncSession = Depends(get_db),
     _current_user: TokenData = Depends(require_auth),
@@ -356,7 +356,7 @@ async def get_overdue_invoices(
 
     if school_id:
         query += " AND school_id = :school_id"
-        params["school_id"] = school_id
+        params["school_id"] = str(school_id)
 
     query += " ORDER BY days_overdue DESC"
 
@@ -372,7 +372,7 @@ async def get_overdue_invoices(
     description="Returns daily collection totals grouped by school and payment method.",
 )
 async def get_daily_collections(
-    school_id: Optional[str] = Query(None, description="Filter by school ID"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID"),
     date_from: Optional[date] = Query(None, description="Filter from date"),
     date_to: Optional[date] = Query(None, description="Filter to date"),
     db: AsyncSession = Depends(get_db),
@@ -384,7 +384,7 @@ async def get_daily_collections(
 
     if school_id:
         query += " AND school_id = :school_id"
-        params["school_id"] = school_id
+        params["school_id"] = str(school_id)
 
     if date_from:
         query += " AND payment_date >= :date_from"
@@ -408,7 +408,7 @@ async def get_daily_collections(
     description="Returns monthly revenue statistics by school.",
 )
 async def get_monthly_revenue(
-    school_id: Optional[str] = Query(None, description="Filter by school ID"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID"),
     year: Optional[int] = Query(None, description="Filter by year"),
     db: AsyncSession = Depends(get_db),
     _current_user: TokenData = Depends(require_auth),
@@ -419,7 +419,7 @@ async def get_monthly_revenue(
 
     if school_id:
         query += " AND school_id = :school_id"
-        params["school_id"] = school_id
+        params["school_id"] = str(school_id)
 
     if year:
         query += " AND EXTRACT(YEAR FROM month) = :year"
