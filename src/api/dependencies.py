@@ -9,6 +9,8 @@ from src.application.services import (
     StudentService,
     InvoiceService,
     PaymentService,
+    GradeService,
+    BillingItemService,
 )
 
 
@@ -34,3 +36,15 @@ async def get_payment_service(
     db: AsyncSession = Depends(get_db),
 ) -> AsyncGenerator[PaymentService, None]:
     yield PaymentService(db)
+
+
+async def get_grade_service(
+    db: AsyncSession = Depends(get_db),
+) -> AsyncGenerator[GradeService, None]:
+    yield GradeService(db)
+
+
+async def get_billing_item_service(
+    db: AsyncSession = Depends(get_db),
+) -> AsyncGenerator[BillingItemService, None]:
+    yield BillingItemService(db)

@@ -9,12 +9,12 @@ class TestSchoolStatement:
     """Test School account statement endpoint."""
 
     @pytest.mark.asyncio
-    async def test_school_statement_empty(self, client: AsyncClient):
+    async def test_school_statement_empty(self, auth_client: AsyncClient):
         """Test statement for school with no students."""
-        school = await client.post("/api/v1/schools", json={"name": "Empty Statement School"})
+        school = await auth_client.post("/api/v1/schools", json={"name": "Empty Statement School"})
         school_id = school.json()["id"]
 
-        response = await client.get(f"/api/v1/schools/{school_id}/statement")
+        response = await auth_client.get(f"/api/v1/schools/{school_id}/statement")
 
         assert response.status_code == 200
         data = response.json()
@@ -27,21 +27,21 @@ class TestSchoolStatement:
         assert data["invoices"] == []
 
     @pytest.mark.asyncio
-    async def test_school_statement_with_data(self, client: AsyncClient):
+    async def test_school_statement_with_data(self, auth_client: AsyncClient):
         """Test statement for school with students and invoices."""
         # Create school
-        school = await client.post("/api/v1/schools", json={"name": "Full Statement School"})
+        school = await auth_client.post("/api/v1/schools", json={"name": "Full Statement School"})
         school_id = school.json()["id"]
 
         # Create student
-        student = await client.post(
+        student = await auth_client.post(
             "/api/v1/students",
             json={"first_name": "Test", "last_name": "Student", "school_id": school_id},
         )
         student_id = student.json()["id"]
 
         # Create invoices
-        await client.post(
+        await auth_client.post(
             "/api/v1/invoices",
             json={
                 "student_id": student_id,
@@ -49,7 +49,7 @@ class TestSchoolStatement:
                 "due_date": date.today().isoformat(),
             },
         )
-        invoice2 = await client.post(
+        invoice2 = await auth_client.post(
             "/api/v1/invoices",
             json={
                 "student_id": student_id,
@@ -59,7 +59,7 @@ class TestSchoolStatement:
         )
 
         # Make a payment
-        await client.post(
+        await auth_client.post(
             "/api/v1/payments",
             json={
                 "invoice_id": invoice2.json()["id"],
@@ -68,7 +68,7 @@ class TestSchoolStatement:
             },
         )
 
-        response = await client.get(f"/api/v1/schools/{school_id}/statement")
+        response = await auth_client.get(f"/api/v1/schools/{school_id}/statement")
 
         assert response.status_code == 200
         data = response.json()
@@ -84,10 +84,10 @@ class TestStudentStatement:
     """Test Student account statement endpoint."""
 
     @pytest.mark.asyncio
-    async def test_student_statement_empty(self, client: AsyncClient):
+    async def test_student_statement_empty(self, auth_client: AsyncClient):
         """Test statement for student with no invoices."""
-        school = await client.post("/api/v1/schools", json={"name": "Statement School"})
-        student = await client.post(
+        school = await auth_client.post("/api/v1/schools", json={"name": "Statement School"})
+        student = await auth_client.post(
             "/api/v1/students",
             json={
                 "first_name": "No",
@@ -97,7 +97,7 @@ class TestStudentStatement:
         )
         student_id = student.json()["id"]
 
-        response = await client.get(f"/api/v1/students/{student_id}/statement")
+        response = await auth_client.get(f"/api/v1/students/{student_id}/statement")
 
         assert response.status_code == 200
         data = response.json()
@@ -107,10 +107,10 @@ class TestStudentStatement:
         assert data["invoices"] == []
 
     @pytest.mark.asyncio
-    async def test_student_statement_with_payments(self, client: AsyncClient):
+    async def test_student_statement_with_payments(self, auth_client: AsyncClient):
         """Test statement showing invoices and payments."""
-        school = await client.post("/api/v1/schools", json={"name": "Pay School"})
-        student = await client.post(
+        school = await auth_client.post("/api/v1/schools", json={"name": "Pay School"})
+        student = await auth_client.post(
             "/api/v1/students",
             json={
                 "first_name": "Paying",
@@ -121,7 +121,7 @@ class TestStudentStatement:
         student_id = student.json()["id"]
 
         # Create invoice
-        invoice = await client.post(
+        invoice = await auth_client.post(
             "/api/v1/invoices",
             json={
                 "student_id": student_id,
@@ -133,16 +133,16 @@ class TestStudentStatement:
         invoice_id = invoice.json()["id"]
 
         # Make payments
-        await client.post(
+        await auth_client.post(
             "/api/v1/payments",
             json={"invoice_id": invoice_id, "amount": 400.00, "method": "CASH"},
         )
-        await client.post(
+        await auth_client.post(
             "/api/v1/payments",
             json={"invoice_id": invoice_id, "amount": 300.00, "method": "BANK_TRANSFER"},
         )
 
-        response = await client.get(f"/api/v1/students/{student_id}/statement")
+        response = await auth_client.get(f"/api/v1/students/{student_id}/statement")
 
         assert response.status_code == 200
         data = response.json()

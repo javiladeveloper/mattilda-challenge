@@ -5,8 +5,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.database.models import Student
-from src.infrastructure.database.repositories import StudentRepository, SchoolRepository
-from src.domain.exceptions import EntityNotFoundError
+from src.infrastructure.database.repositories import StudentRepository, SchoolRepository, GradeRepository
+from src.domain.exceptions import EntityNotFoundError, BusinessRuleError
 from src.domain.enums import InvoiceStatus
 from src.application.dto.statements import (
     StudentStatementDTO,
@@ -21,6 +21,7 @@ class StudentService:
         self.session = session
         self.repo = StudentRepository(session)
         self.school_repo = SchoolRepository(session)
+        self.grade_repo = GradeRepository(session)
 
     async def get_all(
         self, skip: int = 0, limit: int = 100, school_id: UUID = None, active_only: bool = False
@@ -46,22 +47,52 @@ class StudentService:
         return student
 
     async def create(self, data: dict) -> Student:
+        school_id = data.get("school_id")
+        grade_id = data.get("grade_id")
+
         # Verify school exists
-        school = await self.school_repo.get_by_id(data.get("school_id"))
+        school = await self.school_repo.get_by_id(school_id)
         if not school:
-            raise EntityNotFoundError("School", data.get("school_id"))
+            raise EntityNotFoundError("School", school_id)
+
+        # Verify grade exists and belongs to the same school
+        if grade_id:
+            grade = await self.grade_repo.get_by_id(grade_id)
+            if not grade:
+                raise EntityNotFoundError("Grade", grade_id)
+            if grade.school_id != school_id:
+                raise BusinessRuleError(
+                    f"Grade {grade_id} does not belong to school {school_id}"
+                )
+
         return await self.repo.create(data)
 
     async def update(self, student_id: UUID, data: dict) -> Student:
+        # Get current student to check school
+        current_student = await self.repo.get_by_id(student_id)
+        if not current_student:
+            raise EntityNotFoundError("Student", student_id)
+
+        # Determine the school_id (new one if updating, or existing one)
+        school_id = data.get("school_id", current_student.school_id)
+
         # If school_id is being updated, verify new school exists
         if "school_id" in data:
-            school = await self.school_repo.get_by_id(data.get("school_id"))
+            school = await self.school_repo.get_by_id(school_id)
             if not school:
-                raise EntityNotFoundError("School", data.get("school_id"))
+                raise EntityNotFoundError("School", school_id)
+
+        # If grade_id is being updated, verify it exists and belongs to the school
+        if "grade_id" in data and data["grade_id"] is not None:
+            grade = await self.grade_repo.get_by_id(data["grade_id"])
+            if not grade:
+                raise EntityNotFoundError("Grade", data["grade_id"])
+            if grade.school_id != school_id:
+                raise BusinessRuleError(
+                    f"Grade {data['grade_id']} does not belong to school {school_id}"
+                )
 
         student = await self.repo.update(student_id, data)
-        if not student:
-            raise EntityNotFoundError("Student", student_id)
         return student
 
     async def delete(self, student_id: UUID) -> Student:

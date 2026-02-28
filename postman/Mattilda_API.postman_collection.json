@@ -1,0 +1,335 @@
+{
+  "info": {
+    "name": "Mattilda API",
+    "description": "Backend system for school billing management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', jsonData.access_token);",
+                  "    console.log('Token saved successfully!');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "admin",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "admin123",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Login to get JWT token. Token is automatically saved to {{access_token}}"
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Schools",
+      "item": [
+        {
+          "name": "List Schools",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/schools?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "schools"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get School by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/schools/:school_id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "schools", ":school_id"],
+              "variable": [
+                {"key": "school_id", "value": ""}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get School Statement",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/schools/:school_id/statement",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "schools", ":school_id", "statement"],
+              "variable": [
+                {"key": "school_id", "value": ""}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Students",
+      "item": [
+        {
+          "name": "List Students",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/students?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "students"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Student by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/students/:student_id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "students", ":student_id"],
+              "variable": [
+                {"key": "student_id", "value": ""}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Student Statement",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/students/:student_id/statement",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "students", ":student_id", "statement"],
+              "variable": [
+                {"key": "student_id", "value": ""}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Grades",
+      "item": [
+        {
+          "name": "List Grades",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/grades?school_id=:school_id&page=1&page_size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "grades"],
+              "query": [
+                {"key": "school_id", "value": ":school_id"},
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Grade by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/grades/:grade_id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "grades", ":grade_id"],
+              "variable": [
+                {"key": "grade_id", "value": ""}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Billing Items",
+      "item": [
+        {
+          "name": "List Billing Items",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/billing-items?school_id=:school_id&page=1&page_size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "billing-items"],
+              "query": [
+                {"key": "school_id", "value": ":school_id"},
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Billing Items by Year",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/billing-items/by-year?school_id=:school_id&academic_year=2024",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "billing-items", "by-year"],
+              "query": [
+                {"key": "school_id", "value": ":school_id"},
+                {"key": "academic_year", "value": "2024"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Invoices",
+      "item": [
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/invoices?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "invoices"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Invoice by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/invoices/:invoice_id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "invoices", ":invoice_id"],
+              "variable": [
+                {"key": "invoice_id", "value": ""}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/dashboard",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "dashboard"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

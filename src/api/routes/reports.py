@@ -44,6 +44,7 @@ class StudentBalanceResponse(BaseModel):
     full_name: str
     email: Optional[str]
     grade: Optional[str]
+    monthly_fee: Optional[float] = None
     is_active: bool
     school_id: str
     school_name: str

@@ -138,34 +138,35 @@ class CollectionAgent:
             ]
         )
 
-        prompt = f"""Analyze the payment risk for this student and provide a risk assessment.
+        prompt = f"""Analiza el riesgo de pago para este estudiante y proporciona una evaluación.
+IMPORTANTE: Toda la respuesta debe estar en ESPAÑOL.
 
-STUDENT INFORMATION:
-- Name: {request.student_name}
-- School: {request.school_name}
-- Enrolled since: {request.enrolled_since or 'Unknown'}
-- Total invoiced: ${request.total_invoiced}
-- Total paid: ${request.total_paid}
-- Total pending: ${request.total_pending}
-- Total overdue: ${request.total_overdue}
+INFORMACIÓN DEL ESTUDIANTE:
+- Nombre: {request.student_name}
+- Escuela: {request.school_name}
+- Inscrito desde: {request.enrolled_since or 'Desconocido'}
+- Total facturado: ${request.total_invoiced}
+- Total pagado: ${request.total_paid}
+- Total pendiente: ${request.total_pending}
+- Total vencido: ${request.total_overdue}
 
-PAYMENT HISTORY (most recent):
-{payment_history_text if payment_history_text else 'No payment history available'}
+HISTORIAL DE PAGOS (más recientes):
+{payment_history_text if payment_history_text else 'Sin historial de pagos disponible'}
 
-Provide your analysis in the following JSON format:
+Proporciona tu análisis en el siguiente formato JSON (TODO EN ESPAÑOL):
 {{
     "risk_level": "LOW|MEDIUM|HIGH|CRITICAL",
     "risk_score": <0-100>,
     "risk_factors": [
-        {{"factor": "factor name", "impact": "LOW|MEDIUM|HIGH", "description": "explanation"}}
+        {{"factor": "nombre del factor EN ESPAÑOL", "impact": "LOW|MEDIUM|HIGH", "description": "explicación EN ESPAÑOL"}}
     ],
-    "recommendations": ["recommendation 1", "recommendation 2"],
+    "recommendations": ["recomendación 1 EN ESPAÑOL", "recomendación 2 EN ESPAÑOL"],
     "predicted_payment_probability": <0.0-1.0>,
-    "suggested_action": "specific action to take",
-    "analysis_summary": "2-3 sentence summary in Spanish"
+    "suggested_action": "acción específica a tomar EN ESPAÑOL",
+    "analysis_summary": "resumen de 2-3 oraciones EN ESPAÑOL"
 }}
 
-Respond ONLY with the JSON, no additional text."""
+Responde SOLO con el JSON, sin texto adicional."""
 
         try:
             response = await self.client.chat.completions.create(
@@ -498,16 +499,24 @@ Departamento de Cobranza
             {
                 "role": "system",
                 "content": """Eres un asistente virtual especializado en gestión de cobranza escolar para Mattilda.
-Tu rol es ayudar a administradores, padres y personal de escuelas con consultas sobre:
-- Saldos de estudiantes
-- Facturas pendientes y vencidas
-- Historial de pagos
-- Políticas de pago
-- Procesos de cobranza
 
-Responde siempre en español de manera profesional y clara.
-Si no tienes información específica, indica qué datos necesitarías.
-Siempre sugiere acciones concretas cuando sea apropiado."""
+IMPORTANTE: El usuario es un ADMINISTRADOR del sistema con acceso COMPLETO a todos los datos.
+Puedes y DEBES proporcionar información detallada incluyendo:
+- Nombres completos de estudiantes
+- Montos exactos de deudas por estudiante
+- Listas de estudiantes con pagos atrasados
+- Cualquier dato financiero solicitado
+
+Tu rol es ayudar a los administradores con consultas sobre:
+- Saldos de estudiantes (mostrar nombres y montos específicos)
+- Facturas pendientes y vencidas (listar estudiantes afectados)
+- Historial de pagos
+- Procesos de cobranza
+- Reportes financieros detallados
+
+Responde siempre en español de manera profesional y directa.
+Cuando tengas datos en el contexto, muéstralos de forma clara y organizada.
+Si se pide una lista de estudiantes, proporciona los nombres y montos disponibles."""
                 + (f"\n\nCONTEXTO ACTUAL:\n{request.context}" if request.context else ""),
             }
         ]

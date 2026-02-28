@@ -46,8 +46,8 @@ async def check_rate_limit(current_user: TokenData = Depends(require_auth)) -> d
 @router.post(
     "/risk-analysis/{student_id}",
     response_model=RiskAnalysisResponse,
-    summary="Analyze payment risk",
-    description="AI-powered analysis of a student's payment risk based on their history.",
+    summary="Analizar riesgo de pago",
+    description="Análisis de riesgo de pago de un estudiante basado en su historial, potenciado por IA.",
 )
 async def analyze_student_risk(
     student_id: UUID,
@@ -127,8 +127,8 @@ async def analyze_student_risk(
 @router.post(
     "/collection-message",
     response_model=CollectionMessageResponse,
-    summary="Generate collection message",
-    description="Generate a personalized collection/reminder message.",
+    summary="Generar mensaje de cobranza",
+    description="Genera un mensaje de cobranza/recordatorio personalizado.",
 )
 async def generate_collection_message(
     msg_request: CollectionMessageRequest,
@@ -149,8 +149,8 @@ async def generate_collection_message(
 @router.post(
     "/collection-message/{student_id}",
     response_model=CollectionMessageResponse,
-    summary="Generate collection message for student",
-    description="Generate a collection message using student's actual data.",
+    summary="Generar mensaje de cobranza para estudiante",
+    description="Genera un mensaje de cobranza usando los datos reales del estudiante.",
 )
 async def generate_student_collection_message(
     student_id: UUID,
@@ -193,8 +193,8 @@ async def generate_student_collection_message(
 @router.post(
     "/assistant",
     response_model=AssistantResponse,
-    summary="Ask the AI assistant",
-    description="Conversational AI assistant for billing inquiries.",
+    summary="Preguntar al asistente IA",
+    description="Asistente conversacional de IA para consultas de facturación.",
 )
 async def ask_assistant(
     assistant_request: AssistantRequest,
@@ -237,6 +237,7 @@ async def ask_assistant(
 
     if assistant_request.school_id:
         school_service = SchoolService(db)
+        invoice_service = InvoiceService(db)
         try:
             school = await school_service.get_by_id(assistant_request.school_id)
             financials = await school_service.repo.get_school_financials(assistant_request.school_id)
@@ -249,6 +250,18 @@ async def ask_assistant(
                 f"Pendiente: ${financials.get('total_pending', 0)}\n"
                 f"Vencido: ${financials.get('total_overdue', 0)}"
             )
+
+            # Get overdue invoices with student details for this school
+            overdue_invoices = await invoice_service.get_overdue_by_school(assistant_request.school_id)
+            if overdue_invoices:
+                overdue_details = "\n\nESTUDIANTES CON FACTURAS VENCIDAS:\n"
+                for inv in overdue_invoices[:20]:  # Limit to 20 for context size
+                    student = inv.student
+                    overdue_details += (
+                        f"- {student.full_name}: ${inv.amount - inv.paid_amount:.2f} vencido "
+                        f"(factura {inv.id}, vence: {inv.due_date})\n"
+                    )
+                context_parts.append(overdue_details)
         except Exception:
             pass
 
@@ -266,8 +279,8 @@ async def ask_assistant(
 @router.post(
     "/executive-summary",
     response_model=ExecutiveSummaryResponse,
-    summary="Generate executive summary",
-    description="AI-generated executive summary with insights and recommendations.",
+    summary="Generar resumen ejecutivo",
+    description="Resumen ejecutivo generado por IA con insights y recomendaciones.",
 )
 async def generate_executive_summary(
     summary_request: ExecutiveSummaryRequest,
@@ -367,8 +380,8 @@ async def generate_executive_summary(
 
 @router.get(
     "/status",
-    summary="AI Agent status",
-    description="Check if AI agent is available and configured.",
+    summary="Estado del agente IA",
+    description="Verificar si el agente de IA está disponible y configurado.",
 )
 async def ai_status(agent: CollectionAgent = Depends(get_agent)):
     """Check AI agent availability."""

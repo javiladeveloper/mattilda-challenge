@@ -7,6 +7,8 @@ from src.api.routes.payments import router as payments_router
 from src.api.routes.auth import router as auth_router
 from src.api.routes.reports import router as reports_router
 from src.api.routes.ai import router as ai_router
+from src.api.routes.grades import router as grades_router
+from src.api.routes.billing_items import router as billing_items_router
 
 router = APIRouter()
 
@@ -15,5 +17,7 @@ router.include_router(schools_router, prefix="/schools", tags=["Schools"])
 router.include_router(students_router, prefix="/students", tags=["Students"])
 router.include_router(invoices_router, prefix="/invoices", tags=["Invoices"])
 router.include_router(payments_router, prefix="/payments", tags=["Payments"])
+router.include_router(grades_router, tags=["Grades"])
+router.include_router(billing_items_router, tags=["Billing Items"])
 router.include_router(reports_router, tags=["Reports"])
 router.include_router(ai_router, tags=["AI Agent"])

@@ -123,7 +123,7 @@ async def list_school_students(
     pages = math.ceil(total / page_size) if total > 0 else 1
 
     return StudentListResponse(
-        items=[StudentResponse.model_validate(s) for s in students],
+        items=[StudentResponse.from_student(s) for s in students],
         total=total,
         page=page,
         page_size=page_size,

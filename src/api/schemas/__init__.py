@@ -26,6 +26,18 @@ from src.api.schemas.statements import (
     SchoolStatementResponse,
     StudentStatementResponse,
 )
+from src.api.schemas.grade import (
+    GradeCreate,
+    GradeUpdate,
+    GradeResponse,
+    GradeListResponse,
+)
+from src.api.schemas.billing_item import (
+    BillingItemCreate,
+    BillingItemUpdate,
+    BillingItemResponse,
+    BillingItemListResponse,
+)
 
 __all__ = [
     "PaginatedResponse",
@@ -46,4 +58,12 @@ __all__ = [
     "PaymentListResponse",
     "SchoolStatementResponse",
     "StudentStatementResponse",
+    "GradeCreate",
+    "GradeUpdate",
+    "GradeResponse",
+    "GradeListResponse",
+    "BillingItemCreate",
+    "BillingItemUpdate",
+    "BillingItemResponse",
+    "BillingItemListResponse",
 ]

@@ -43,7 +43,7 @@ async def list_students(
     pages = math.ceil(total / page_size) if total > 0 else 1
 
     return StudentListResponse(
-        items=[StudentResponse.model_validate(s) for s in students],
+        items=[StudentResponse.from_student(s) for s in students],
         total=total,
         page=page,
         page_size=page_size,
@@ -59,7 +59,7 @@ async def get_student(
 ):
     try:
         student = await service.get_by_id(student_id)
-        return StudentResponse.model_validate(student)
+        return StudentResponse.from_student(student)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
@@ -72,7 +72,7 @@ async def create_student(
 ):
     try:
         student = await service.create(data.model_dump())
-        return StudentResponse.model_validate(student)
+        return StudentResponse.from_student(student)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
@@ -86,7 +86,7 @@ async def update_student(
 ):
     try:
         student = await service.update(student_id, data.model_dump(exclude_unset=True))
-        return StudentResponse.model_validate(student)
+        return StudentResponse.from_student(student)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
@@ -99,7 +99,7 @@ async def delete_student(
 ):
     try:
         student = await service.delete(student_id)
-        return StudentResponse.model_validate(student)
+        return StudentResponse.from_student(student)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
