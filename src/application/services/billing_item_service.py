@@ -45,9 +45,7 @@ class BillingItemService:
         active_only: bool = True,
     ) -> List[BillingItem]:
         """Get billing items for a specific academic year."""
-        return await self.repo.get_by_academic_year(
-            school_id, academic_year, active_only
-        )
+        return await self.repo.get_by_academic_year(school_id, academic_year, active_only)
 
     async def create(self, data: dict) -> BillingItem:
         """Create a new billing item."""

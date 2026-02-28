@@ -16,29 +16,97 @@ from typing import Optional, Tuple
 
 from openai import AsyncOpenAI
 
-
 # Keywords related to school billing management
 ALLOWED_TOPICS = {
     # Spanish keywords
-    "pago", "pagos", "factura", "facturas", "deuda", "deudas", "saldo", "saldos",
-    "cobro", "cobranza", "mensualidad", "cuota", "cuotas", "matrícula", "matricula",
-    "estudiante", "estudiantes", "alumno", "alumnos", "padre", "padres", "apoderado",
-    "escuela", "colegio", "instituto", "pensión", "pension", "mora", "morosidad",
-    "vencido", "vencida", "pendiente", "pendientes", "abono", "abonos", "recibo",
-    "estado de cuenta", "recordatorio", "notificación", "debe", "deben", "adeuda",
-    "pagar", "cobrar", "facturar", "total", "monto", "importe",
+    "pago",
+    "pagos",
+    "factura",
+    "facturas",
+    "deuda",
+    "deudas",
+    "saldo",
+    "saldos",
+    "cobro",
+    "cobranza",
+    "mensualidad",
+    "cuota",
+    "cuotas",
+    "matrícula",
+    "matricula",
+    "estudiante",
+    "estudiantes",
+    "alumno",
+    "alumnos",
+    "padre",
+    "padres",
+    "apoderado",
+    "escuela",
+    "colegio",
+    "instituto",
+    "pensión",
+    "pension",
+    "mora",
+    "morosidad",
+    "vencido",
+    "vencida",
+    "pendiente",
+    "pendientes",
+    "abono",
+    "abonos",
+    "recibo",
+    "estado de cuenta",
+    "recordatorio",
+    "notificación",
+    "debe",
+    "deben",
+    "adeuda",
+    "pagar",
+    "cobrar",
+    "facturar",
+    "total",
+    "monto",
+    "importe",
     # English keywords (in case)
-    "payment", "invoice", "debt", "balance", "student", "school", "billing", "fee",
+    "payment",
+    "invoice",
+    "debt",
+    "balance",
+    "student",
+    "school",
+    "billing",
+    "fee",
     # Common variations
-    "cunto", "cuanto", "cuando", "reportes", "reporte", "informe",
+    "cunto",
+    "cuanto",
+    "cuando",
+    "reportes",
+    "reporte",
+    "informe",
 }
 
 # Phrases that indicate off-topic questions
 OFF_TOPIC_PATTERNS = [
-    r"chiste", r"broma", r"clima", r"tiempo", r"cocina", r"receta",
-    r"película", r"pelicula", r"música", r"musica", r"juego", r"jugar",
-    r"historia de", r"quién (fue|es|era)", r"quien (fue|es|era)",
-    r"capital de", r"presidente", r"futbol", r"fútbol", r"deportes",
+    r"chiste",
+    r"broma",
+    r"clima",
+    r"tiempo",
+    r"cocina",
+    r"receta",
+    r"película",
+    r"pelicula",
+    r"música",
+    r"musica",
+    r"juego",
+    r"jugar",
+    r"historia de",
+    r"quién (fue|es|era)",
+    r"quien (fue|es|era)",
+    r"capital de",
+    r"presidente",
+    r"futbol",
+    r"fútbol",
+    r"deportes",
 ]
 
 from src.config import settings
@@ -93,7 +161,7 @@ class CollectionAgent:
                 return False, "La pregunta no está relacionada con gestión escolar o pagos."
 
         # Check if any allowed topic keyword is present
-        words = re.findall(r'\w+', question_lower)
+        words = re.findall(r"\w+", question_lower)
         for word in words:
             if word in ALLOWED_TOPICS:
                 return True, ""
@@ -115,11 +183,12 @@ class CollectionAgent:
             return True, ""
 
         # Default: reject if no billing-related keywords found
-        return False, "Por favor, realiza preguntas relacionadas con pagos, facturas, estudiantes o gestión escolar."
+        return (
+            False,
+            "Por favor, realiza preguntas relacionadas con pagos, facturas, estudiantes o gestión escolar.",
+        )
 
-    async def analyze_payment_risk(
-        self, request: RiskAnalysisRequest
-    ) -> RiskAnalysisResponse:
+    async def analyze_payment_risk(self, request: RiskAnalysisRequest) -> RiskAnalysisResponse:
         """
         Analyze payment risk for a student based on their history.
 
@@ -192,9 +261,7 @@ Responde SOLO con el JSON, sin texto adicional."""
             # Fallback to rule-based analysis
             return self._fallback_risk_analysis(request)
 
-    def _fallback_risk_analysis(
-        self, request: RiskAnalysisRequest
-    ) -> RiskAnalysisResponse:
+    def _fallback_risk_analysis(self, request: RiskAnalysisRequest) -> RiskAnalysisResponse:
         """Fallback rule-based risk analysis when AI is not available."""
         # Calculate risk score based on simple rules
         risk_score = 0
@@ -464,9 +531,11 @@ Departamento de Cobranza
             message=message,
             tone_used=request.tone,
             channel=request.channel,
-            call_to_action="Realizar pago ahora"
-            if request.include_payment_link
-            else "Contactar administración",
+            call_to_action=(
+                "Realizar pago ahora"
+                if request.include_payment_link
+                else "Contactar administración"
+            ),
         )
 
     async def answer_question(self, request: AssistantRequest) -> AssistantResponse:
@@ -643,9 +712,7 @@ Genera un resumen en formato JSON:
 
             result = json.loads(response.choices[0].message.content)
 
-            period_str = (
-                f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
-            )
+            period_str = f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
 
             return ExecutiveSummaryResponse(
                 title=result["title"],
@@ -703,7 +770,9 @@ Genera un resumen en formato JSON:
             f"y queda pendiente ${metrics.total_pending}. "
         )
         if metrics.total_overdue > 0:
-            narrative += f"Existe un saldo vencido de ${metrics.total_overdue} que requiere seguimiento."
+            narrative += (
+                f"Existe un saldo vencido de ${metrics.total_overdue} que requiere seguimiento."
+            )
         else:
             narrative += "No hay saldos vencidos actualmente."
 

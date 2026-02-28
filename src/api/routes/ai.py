@@ -98,7 +98,11 @@ async def analyze_student_risk(
                     due_date=invoice.due_date,
                     paid_date=last_payment_date,
                     days_late=days_late,
-                    status=invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status),
+                    status=(
+                        invoice.status.value
+                        if hasattr(invoice.status, "value")
+                        else str(invoice.status)
+                    ),
                 )
             )
 
@@ -223,7 +227,9 @@ async def ask_assistant(
             # Use get_with_invoices to eager-load school relationship
             student = await student_service.get_with_invoices(assistant_request.student_id)
             if student:
-                financials = await student_service.repo.get_student_financials(assistant_request.student_id)
+                financials = await student_service.repo.get_student_financials(
+                    assistant_request.student_id
+                )
                 context_parts.append(
                     f"Estudiante: {student.full_name}\n"
                     f"Escuela: {student.school.name if student.school else 'N/A'}\n"
@@ -240,7 +246,9 @@ async def ask_assistant(
         invoice_service = InvoiceService(db)
         try:
             school = await school_service.get_by_id(assistant_request.school_id)
-            financials = await school_service.repo.get_school_financials(assistant_request.school_id)
+            financials = await school_service.repo.get_school_financials(
+                assistant_request.school_id
+            )
             student_count = await school_service.repo.get_student_count(assistant_request.school_id)
             context_parts.append(
                 f"Escuela: {school.name}\n"
@@ -252,7 +260,9 @@ async def ask_assistant(
             )
 
             # Get overdue invoices with student details for this school
-            overdue_invoices = await invoice_service.get_overdue_by_school(assistant_request.school_id)
+            overdue_invoices = await invoice_service.get_overdue_by_school(
+                assistant_request.school_id
+            )
             if overdue_invoices:
                 overdue_details = "\n\nESTUDIANTES CON FACTURAS VENCIDAS:\n"
                 for inv in overdue_invoices[:20]:  # Limit to 20 for context size
@@ -391,6 +401,8 @@ async def ai_status(agent: CollectionAgent = Depends(get_agent)):
         "model": agent.model if is_available else None,
         "fallback_mode": not is_available,
         "message": (
-            "AI agent is ready" if is_available else "AI agent running in fallback mode (no API key)"
+            "AI agent is ready"
+            if is_available
+            else "AI agent running in fallback mode (no API key)"
         ),
     }

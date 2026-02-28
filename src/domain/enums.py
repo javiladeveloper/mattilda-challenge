@@ -19,7 +19,8 @@ class PaymentMethod(str, Enum):
 
 class InvoiceType(str, Enum):
     """Type of invoice based on what it charges for."""
-    TUITION = "TUITION"          # Monthly tuition from grade
-    ENROLLMENT = "ENROLLMENT"    # Enrollment/matricula fee
-    FEE = "FEE"                  # Other billing items (food, transport, etc.)
-    CUSTOM = "CUSTOM"            # Manual entry with custom amount
+
+    TUITION = "TUITION"  # Monthly tuition from grade
+    ENROLLMENT = "ENROLLMENT"  # Enrollment/matricula fee
+    FEE = "FEE"  # Other billing items (food, transport, etc.)
+    CUSTOM = "CUSTOM"  # Manual entry with custom amount
