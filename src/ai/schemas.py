@@ -97,10 +97,12 @@ class RiskAnalysisResponse(BaseModel):
 class CollectionMessageRequest(BaseModel):
     """Request to generate a collection message."""
 
-    student_name: str
+    # These fields are optional when using /collection-message/{student_id}
+    # They will be filled automatically from the student data
+    student_name: Optional[str] = None
     parent_name: Optional[str] = None
-    school_name: str
-    pending_amount: Decimal
+    school_name: Optional[str] = None
+    pending_amount: Optional[Decimal] = None
     overdue_amount: Decimal = Decimal("0")
     days_overdue: int = 0
     invoices_pending: int = 1

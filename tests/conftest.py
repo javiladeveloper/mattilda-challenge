@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import uuid
 from typing import AsyncGenerator
 
 from httpx import AsyncClient, ASGITransport
@@ -7,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 
 from src.main import app
 from src.infrastructure.database.models import Base
+from src.infrastructure.database.models_user import User
 from src.infrastructure.database.connection import get_db
+from src.api.auth.jwt import create_access_token, get_password_hash
 
 # Test database URL
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -16,6 +19,12 @@ engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestSessionLocal = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
+
+# Test user credentials
+TEST_USER_ID = str(uuid.uuid4())
+TEST_USERNAME = "testuser"
+TEST_EMAIL = "test@mattilda.com"
+TEST_PASSWORD = "testpassword123"
 
 
 @pytest.fixture(scope="session")
@@ -58,3 +67,42 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with TestSessionLocal() as session:
         yield session
+
+
+@pytest.fixture
+async def test_user(db_session: AsyncSession) -> User:
+    """Create a test user for authentication."""
+    user = User(
+        id=uuid.UUID(TEST_USER_ID),
+        username=TEST_USERNAME,
+        email=TEST_EMAIL,
+        hashed_password=get_password_hash(TEST_PASSWORD),
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def auth_token(test_user: User) -> str:
+    """Generate a valid JWT token for the test user."""
+    return create_access_token(
+        data={"sub": test_user.username, "user_id": str(test_user.id)}
+    )
+
+
+@pytest.fixture
+def auth_headers(auth_token: str) -> dict:
+    """Return authorization headers with the test token."""
+    return {"Authorization": f"Bearer {auth_token}"}
+
+
+@pytest.fixture
+async def auth_client(auth_token: str) -> AsyncGenerator[AsyncClient, None]:
+    """Authenticated HTTP client for testing protected endpoints."""
+    transport = ASGITransport(app=app)
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
+        yield ac

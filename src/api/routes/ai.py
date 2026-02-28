@@ -7,6 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_db
+from src.api.rate_limiter import ai_rate_limiter
+from src.api.auth.jwt import require_auth
+from src.api.auth.models import TokenData
 from src.ai.agent import CollectionAgent
 from src.ai.schemas import (
     RiskAnalysisRequest,
@@ -30,6 +33,11 @@ def get_agent() -> CollectionAgent:
     return CollectionAgent()
 
 
+async def check_rate_limit(current_user: TokenData = Depends(require_auth)) -> dict:
+    """Rate limit dependency for AI endpoints (per user)."""
+    return await ai_rate_limiter.check_rate_limit(current_user.user_id)
+
+
 # ============================================
 # Risk Analysis
 # ============================================
@@ -38,13 +46,14 @@ def get_agent() -> CollectionAgent:
 @router.post(
     "/risk-analysis/{student_id}",
     response_model=RiskAnalysisResponse,
-    summary="Analyze payment risk",
-    description="AI-powered analysis of a student's payment risk based on their history.",
+    summary="Analizar riesgo de pago",
+    description="Análisis de riesgo de pago de un estudiante basado en su historial, potenciado por IA.",
 )
 async def analyze_student_risk(
     student_id: UUID,
     db: AsyncSession = Depends(get_db),
     agent: CollectionAgent = Depends(get_agent),
+    _rate_limit: dict = Depends(check_rate_limit),
 ):
     """
     Analyze payment risk for a specific student.
@@ -58,25 +67,22 @@ async def analyze_student_risk(
     Returns risk level (LOW, MEDIUM, HIGH, CRITICAL) with recommendations.
     """
     student_service = StudentService(db)
-    invoice_service = InvoiceService(db)
 
-    # Get student with invoices
-    try:
-        student = await student_service.get_by_id(student_id)
-    except Exception:
+    # Get student with invoices and school (eager-loaded)
+    student = await student_service.get_with_invoices(student_id)
+    if not student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Student {student_id} not found",
         )
 
     # Get student financials
-    student_with_invoices = await student_service.get_with_invoices(student_id)
     financials = await student_service.repo.get_student_financials(student_id)
 
     # Build payment history
     payment_history = []
-    if student_with_invoices and student_with_invoices.invoices:
-        for invoice in student_with_invoices.invoices:
+    if student.invoices:
+        for invoice in student.invoices:
             last_payment_date = None
             if invoice.payments:
                 last_payment_date = max(p.payment_date for p in invoice.payments)
@@ -96,8 +102,8 @@ async def analyze_student_risk(
                 )
             )
 
-    # Build request
-    request = RiskAnalysisRequest(
+    # Build risk analysis request
+    risk_request = RiskAnalysisRequest(
         student_id=student_id,
         student_name=student.full_name,
         school_name=student.school.name if student.school else "Unknown",
@@ -110,7 +116,7 @@ async def analyze_student_risk(
     )
 
     # Analyze risk
-    return await agent.analyze_payment_risk(request)
+    return await agent.analyze_payment_risk(risk_request)
 
 
 # ============================================
@@ -121,12 +127,13 @@ async def analyze_student_risk(
 @router.post(
     "/collection-message",
     response_model=CollectionMessageResponse,
-    summary="Generate collection message",
-    description="Generate a personalized collection/reminder message.",
+    summary="Generar mensaje de cobranza",
+    description="Genera un mensaje de cobranza/recordatorio personalizado.",
 )
 async def generate_collection_message(
-    request: CollectionMessageRequest,
+    msg_request: CollectionMessageRequest,
     agent: CollectionAgent = Depends(get_agent),
+    _rate_limit: dict = Depends(check_rate_limit),
 ):
     """
     Generate a personalized collection message.
@@ -136,20 +143,21 @@ async def generate_collection_message(
 
     The AI creates contextually appropriate messages in Spanish.
     """
-    return await agent.generate_collection_message(request)
+    return await agent.generate_collection_message(msg_request)
 
 
 @router.post(
     "/collection-message/{student_id}",
     response_model=CollectionMessageResponse,
-    summary="Generate collection message for student",
-    description="Generate a collection message using student's actual data.",
+    summary="Generar mensaje de cobranza para estudiante",
+    description="Genera un mensaje de cobranza usando los datos reales del estudiante.",
 )
 async def generate_student_collection_message(
     student_id: UUID,
-    request: CollectionMessageRequest,
+    msg_request: CollectionMessageRequest,
     db: AsyncSession = Depends(get_db),
     agent: CollectionAgent = Depends(get_agent),
+    _rate_limit: dict = Depends(check_rate_limit),
 ):
     """
     Generate a collection message for a specific student.
@@ -158,9 +166,9 @@ async def generate_student_collection_message(
     """
     student_service = StudentService(db)
 
-    try:
-        student = await student_service.get_by_id(student_id)
-    except Exception:
+    # Use get_with_invoices to eager-load school relationship
+    student = await student_service.get_with_invoices(student_id)
+    if not student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Student {student_id} not found",
@@ -169,12 +177,12 @@ async def generate_student_collection_message(
     financials = await student_service.repo.get_student_financials(student_id)
 
     # Update request with actual data
-    request.student_name = student.full_name
-    request.school_name = student.school.name if student.school else "La escuela"
-    request.pending_amount = financials.get("total_pending", Decimal("0"))
-    request.overdue_amount = financials.get("total_overdue", Decimal("0"))
+    msg_request.student_name = student.full_name
+    msg_request.school_name = student.school.name if student.school else "La escuela"
+    msg_request.pending_amount = financials.get("total_pending", Decimal("0"))
+    msg_request.overdue_amount = financials.get("total_overdue", Decimal("0"))
 
-    return await agent.generate_collection_message(request)
+    return await agent.generate_collection_message(msg_request)
 
 
 # ============================================
@@ -185,13 +193,14 @@ async def generate_student_collection_message(
 @router.post(
     "/assistant",
     response_model=AssistantResponse,
-    summary="Ask the AI assistant",
-    description="Conversational AI assistant for billing inquiries.",
+    summary="Preguntar al asistente IA",
+    description="Asistente conversacional de IA para consultas de facturación.",
 )
 async def ask_assistant(
-    request: AssistantRequest,
+    assistant_request: AssistantRequest,
     db: AsyncSession = Depends(get_db),
     agent: CollectionAgent = Depends(get_agent),
+    _rate_limit: dict = Depends(check_rate_limit),
 ):
     """
     Ask the AI assistant about payments and accounts.
@@ -208,28 +217,31 @@ async def ask_assistant(
     # If student_id or school_id provided, add context
     context_parts = []
 
-    if request.student_id:
+    if assistant_request.student_id:
         student_service = StudentService(db)
         try:
-            student = await student_service.get_by_id(request.student_id)
-            financials = await student_service.repo.get_student_financials(request.student_id)
-            context_parts.append(
-                f"Estudiante: {student.full_name}\n"
-                f"Escuela: {student.school.name if student.school else 'N/A'}\n"
-                f"Total facturado: ${financials.get('total_invoiced', 0)}\n"
-                f"Total pagado: ${financials.get('total_paid', 0)}\n"
-                f"Pendiente: ${financials.get('total_pending', 0)}\n"
-                f"Vencido: ${financials.get('total_overdue', 0)}"
-            )
+            # Use get_with_invoices to eager-load school relationship
+            student = await student_service.get_with_invoices(assistant_request.student_id)
+            if student:
+                financials = await student_service.repo.get_student_financials(assistant_request.student_id)
+                context_parts.append(
+                    f"Estudiante: {student.full_name}\n"
+                    f"Escuela: {student.school.name if student.school else 'N/A'}\n"
+                    f"Total facturado: ${financials.get('total_invoiced', 0)}\n"
+                    f"Total pagado: ${financials.get('total_paid', 0)}\n"
+                    f"Pendiente: ${financials.get('total_pending', 0)}\n"
+                    f"Vencido: ${financials.get('total_overdue', 0)}"
+                )
         except Exception:
             pass
 
-    if request.school_id:
+    if assistant_request.school_id:
         school_service = SchoolService(db)
+        invoice_service = InvoiceService(db)
         try:
-            school = await school_service.get_by_id(request.school_id)
-            financials = await school_service.repo.get_school_financials(request.school_id)
-            student_count = await school_service.repo.get_student_count(request.school_id)
+            school = await school_service.get_by_id(assistant_request.school_id)
+            financials = await school_service.repo.get_school_financials(assistant_request.school_id)
+            student_count = await school_service.repo.get_student_count(assistant_request.school_id)
             context_parts.append(
                 f"Escuela: {school.name}\n"
                 f"Estudiantes activos: {student_count}\n"
@@ -238,13 +250,25 @@ async def ask_assistant(
                 f"Pendiente: ${financials.get('total_pending', 0)}\n"
                 f"Vencido: ${financials.get('total_overdue', 0)}"
             )
+
+            # Get overdue invoices with student details for this school
+            overdue_invoices = await invoice_service.get_overdue_by_school(assistant_request.school_id)
+            if overdue_invoices:
+                overdue_details = "\n\nESTUDIANTES CON FACTURAS VENCIDAS:\n"
+                for inv in overdue_invoices[:20]:  # Limit to 20 for context size
+                    student = inv.student
+                    overdue_details += (
+                        f"- {student.full_name}: ${inv.amount - inv.paid_amount:.2f} vencido "
+                        f"(factura {inv.id}, vence: {inv.due_date})\n"
+                    )
+                context_parts.append(overdue_details)
         except Exception:
             pass
 
     if context_parts:
-        request.context = "\n\n".join(context_parts)
+        assistant_request.context = "\n\n".join(context_parts)
 
-    return await agent.answer_question(request)
+    return await agent.answer_question(assistant_request)
 
 
 # ============================================
@@ -255,13 +279,14 @@ async def ask_assistant(
 @router.post(
     "/executive-summary",
     response_model=ExecutiveSummaryResponse,
-    summary="Generate executive summary",
-    description="AI-generated executive summary with insights and recommendations.",
+    summary="Generar resumen ejecutivo",
+    description="Resumen ejecutivo generado por IA con insights y recomendaciones.",
 )
 async def generate_executive_summary(
-    request: ExecutiveSummaryRequest,
+    summary_request: ExecutiveSummaryRequest,
     db: AsyncSession = Depends(get_db),
     agent: CollectionAgent = Depends(get_agent),
+    _rate_limit: dict = Depends(check_rate_limit),
 ):
     """
     Generate an AI-powered executive summary.
@@ -277,22 +302,22 @@ async def generate_executive_summary(
     """
     school_service = SchoolService(db)
 
-    if request.school_id:
+    if summary_request.school_id:
         # Single school summary
         try:
-            school = await school_service.get_by_id(request.school_id)
+            school = await school_service.get_by_id(summary_request.school_id)
         except Exception:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"School {request.school_id} not found",
+                detail=f"School {summary_request.school_id} not found",
             )
 
-        financials = await school_service.repo.get_school_financials(request.school_id)
+        financials = await school_service.repo.get_school_financials(summary_request.school_id)
         total_students = await school_service.repo.get_student_count(
-            request.school_id, active_only=False
+            summary_request.school_id, active_only=False
         )
         active_students = await school_service.repo.get_student_count(
-            request.school_id, active_only=True
+            summary_request.school_id, active_only=True
         )
 
         total_invoiced = financials.get("total_invoiced", Decimal("0"))
@@ -345,7 +370,7 @@ async def generate_executive_summary(
             collection_rate=float(total_paid / total_invoiced) if total_invoiced > 0 else 0,
         )
 
-    return await agent.generate_executive_summary(request, metrics)
+    return await agent.generate_executive_summary(summary_request, metrics)
 
 
 # ============================================
@@ -355,8 +380,8 @@ async def generate_executive_summary(
 
 @router.get(
     "/status",
-    summary="AI Agent status",
-    description="Check if AI agent is available and configured.",
+    summary="Estado del agente IA",
+    description="Verificar si el agente de IA está disponible y configurado.",
 )
 async def ai_status(agent: CollectionAgent = Depends(get_agent)):
     """Check AI agent availability."""

@@ -89,3 +89,7 @@ class InvoiceService:
 
         await self.session.flush()
         return invoice
+
+    async def get_overdue_by_school(self, school_id: UUID, limit: int = 50) -> List[Invoice]:
+        """Get overdue invoices for a school with student details."""
+        return await self.repo.get_overdue_by_school(school_id, limit=limit)

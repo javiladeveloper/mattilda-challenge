@@ -4,6 +4,8 @@ import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.api.dependencies import get_student_service, get_invoice_service
+from src.api.auth.jwt import require_auth
+from src.api.auth.models import TokenData
 from src.api.schemas.student import (
     StudentCreate,
     StudentUpdate,
@@ -31,6 +33,7 @@ async def list_students(
     school_id: UUID = Query(None),
     active_only: bool = Query(False),
     service: StudentService = Depends(get_student_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     skip = (page - 1) * page_size
     students = await service.get_all(
@@ -40,7 +43,7 @@ async def list_students(
     pages = math.ceil(total / page_size) if total > 0 else 1
 
     return StudentListResponse(
-        items=[StudentResponse.model_validate(s) for s in students],
+        items=[StudentResponse.from_student(s) for s in students],
         total=total,
         page=page,
         page_size=page_size,
@@ -52,10 +55,11 @@ async def list_students(
 async def get_student(
     student_id: UUID,
     service: StudentService = Depends(get_student_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         student = await service.get_by_id(student_id)
-        return StudentResponse.model_validate(student)
+        return StudentResponse.from_student(student)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
@@ -64,10 +68,11 @@ async def get_student(
 async def create_student(
     data: StudentCreate,
     service: StudentService = Depends(get_student_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         student = await service.create(data.model_dump())
-        return StudentResponse.model_validate(student)
+        return StudentResponse.from_student(student)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
@@ -77,10 +82,11 @@ async def update_student(
     student_id: UUID,
     data: StudentUpdate,
     service: StudentService = Depends(get_student_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         student = await service.update(student_id, data.model_dump(exclude_unset=True))
-        return StudentResponse.model_validate(student)
+        return StudentResponse.from_student(student)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
@@ -89,10 +95,11 @@ async def update_student(
 async def delete_student(
     student_id: UUID,
     service: StudentService = Depends(get_student_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         student = await service.delete(student_id)
-        return StudentResponse.model_validate(student)
+        return StudentResponse.from_student(student)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
@@ -102,9 +109,10 @@ async def list_student_invoices(
     student_id: UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
-    status: InvoiceStatus = Query(None),
+    invoice_status: InvoiceStatus = Query(None),
     student_service: StudentService = Depends(get_student_service),
     invoice_service: InvoiceService = Depends(get_invoice_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     # Verify student exists
     try:
@@ -114,9 +122,9 @@ async def list_student_invoices(
 
     skip = (page - 1) * page_size
     invoices = await invoice_service.get_all(
-        skip=skip, limit=page_size, student_id=student_id, status=status
+        skip=skip, limit=page_size, student_id=student_id, status=invoice_status
     )
-    total = await invoice_service.count(student_id=student_id, status=status)
+    total = await invoice_service.count(student_id=student_id, status=invoice_status)
     pages = math.ceil(total / page_size) if total > 0 else 1
 
     return InvoiceListResponse(
@@ -132,6 +140,7 @@ async def list_student_invoices(
 async def get_student_statement(
     student_id: UUID,
     service: StudentService = Depends(get_student_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         statement = await service.get_statement(student_id)

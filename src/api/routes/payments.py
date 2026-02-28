@@ -4,6 +4,8 @@ import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.api.dependencies import get_payment_service, get_invoice_service
+from src.api.auth.jwt import require_auth
+from src.api.auth.models import TokenData
 from src.api.schemas.payment import (
     PaymentCreate,
     PaymentResponse,
@@ -27,6 +29,7 @@ async def list_payments(
     invoice_id: UUID = Query(None),
     method: PaymentMethod = Query(None),
     service: PaymentService = Depends(get_payment_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     skip = (page - 1) * page_size
     payments = await service.get_all(
@@ -48,6 +51,7 @@ async def list_payments(
 async def get_payment(
     payment_id: UUID,
     service: PaymentService = Depends(get_payment_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         payment = await service.get_by_id(payment_id)
@@ -60,6 +64,7 @@ async def get_payment(
 async def create_payment(
     data: PaymentCreate,
     service: PaymentService = Depends(get_payment_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         payment = await service.create(data.model_dump(exclude_unset=True))
@@ -79,6 +84,7 @@ async def list_invoice_payments(
     page_size: int = Query(10, ge=1, le=100),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     payment_service: PaymentService = Depends(get_payment_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     # Verify invoice exists
     try:

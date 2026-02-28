@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html
+from fastapi.openapi.utils import get_openapi
 
 from src.config import settings
 from src.api.routes import router as api_router
@@ -19,6 +20,64 @@ app = FastAPI(
     redoc_url=None,  # Disable default, use custom
     openapi_url="/openapi.json",
 )
+
+
+def custom_openapi():
+    """Custom OpenAPI schema with security configuration for Postman."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=settings.project_name,
+        version=settings.project_version,
+        description="Backend system for school billing management",
+        routes=app.routes,
+    )
+
+    # Add security schemes
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT Token. Use {{access_token}} in Postman. Get token from POST /api/v1/auth/login",
+            "x-bearer-format": "{{access_token}}"
+        },
+        "OAuth2PasswordBearer": {
+            "type": "oauth2",
+            "flows": {
+                "password": {
+                    "tokenUrl": "/api/v1/auth/login",
+                    "scopes": {}
+                }
+            },
+            "description": "OAuth2 Password Flow. Username: admin, Password: admin123"
+        }
+    }
+
+    # Add Postman collection variables hint
+    openapi_schema["info"]["x-postman-collection-variables"] = [
+        {
+            "key": "access_token",
+            "value": "",
+            "type": "string",
+            "description": "JWT access token from login endpoint"
+        },
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        }
+    ]
+
+    # Apply security globally to all endpoints (except auth endpoints)
+    openapi_schema["security"] = [{"BearerAuth": []}, {"OAuth2PasswordBearer": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 @app.get("/redoc", include_in_schema=False)

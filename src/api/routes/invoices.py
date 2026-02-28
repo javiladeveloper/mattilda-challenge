@@ -4,6 +4,8 @@ import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.api.dependencies import get_invoice_service
+from src.api.auth.jwt import require_auth
+from src.api.auth.models import TokenData
 from src.api.schemas.invoice import (
     InvoiceCreate,
     InvoiceUpdate,
@@ -24,8 +26,9 @@ async def list_invoices(
     page_size: int = Query(10, ge=1, le=100),
     student_id: UUID = Query(None),
     school_id: UUID = Query(None),
-    status: InvoiceStatus = Query(None),
+    invoice_status: InvoiceStatus = Query(None),
     service: InvoiceService = Depends(get_invoice_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     skip = (page - 1) * page_size
     invoices = await service.get_all(
@@ -33,9 +36,9 @@ async def list_invoices(
         limit=page_size,
         student_id=student_id,
         school_id=school_id,
-        status=status,
+        status=invoice_status,
     )
-    total = await service.count(student_id=student_id, status=status)
+    total = await service.count(student_id=student_id, status=invoice_status)
     pages = math.ceil(total / page_size) if total > 0 else 1
 
     return InvoiceListResponse(
@@ -51,6 +54,7 @@ async def list_invoices(
 async def get_invoice(
     invoice_id: UUID,
     service: InvoiceService = Depends(get_invoice_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         invoice = await service.get_by_id(invoice_id)
@@ -74,6 +78,7 @@ async def get_invoice(
 async def create_invoice(
     data: InvoiceCreate,
     service: InvoiceService = Depends(get_invoice_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         invoice = await service.create(data.model_dump())
@@ -87,6 +92,7 @@ async def update_invoice(
     invoice_id: UUID,
     data: InvoiceUpdate,
     service: InvoiceService = Depends(get_invoice_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         invoice = await service.update(invoice_id, data.model_dump(exclude_unset=True))
@@ -99,6 +105,7 @@ async def update_invoice(
 async def cancel_invoice(
     invoice_id: UUID,
     service: InvoiceService = Depends(get_invoice_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         invoice = await service.cancel(invoice_id)

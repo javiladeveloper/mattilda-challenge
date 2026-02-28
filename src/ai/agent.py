@@ -1,5 +1,5 @@
 """
-AI Collection Agent - Intelligent billing assistant powered by Claude.
+AI Collection Agent - Intelligent billing assistant powered by OpenAI.
 
 This agent provides:
 1. Payment Risk Analysis - Predict likelihood of late payments
@@ -8,12 +8,38 @@ This agent provides:
 4. Executive Summaries - AI-generated reports with insights
 """
 
-from datetime import datetime, date
+import json
+import re
+from datetime import datetime
 from decimal import Decimal
-from typing import Optional
-from uuid import UUID
+from typing import Optional, Tuple
 
-import anthropic
+from openai import AsyncOpenAI
+
+
+# Keywords related to school billing management
+ALLOWED_TOPICS = {
+    # Spanish keywords
+    "pago", "pagos", "factura", "facturas", "deuda", "deudas", "saldo", "saldos",
+    "cobro", "cobranza", "mensualidad", "cuota", "cuotas", "matrícula", "matricula",
+    "estudiante", "estudiantes", "alumno", "alumnos", "padre", "padres", "apoderado",
+    "escuela", "colegio", "instituto", "pensión", "pension", "mora", "morosidad",
+    "vencido", "vencida", "pendiente", "pendientes", "abono", "abonos", "recibo",
+    "estado de cuenta", "recordatorio", "notificación", "debe", "deben", "adeuda",
+    "pagar", "cobrar", "facturar", "total", "monto", "importe",
+    # English keywords (in case)
+    "payment", "invoice", "debt", "balance", "student", "school", "billing", "fee",
+    # Common variations
+    "cunto", "cuanto", "cuando", "reportes", "reporte", "informe",
+}
+
+# Phrases that indicate off-topic questions
+OFF_TOPIC_PATTERNS = [
+    r"chiste", r"broma", r"clima", r"tiempo", r"cocina", r"receta",
+    r"película", r"pelicula", r"música", r"musica", r"juego", r"jugar",
+    r"historia de", r"quién (fue|es|era)", r"quien (fue|es|era)",
+    r"capital de", r"presidente", r"futbol", r"fútbol", r"deportes",
+]
 
 from src.config import settings
 from src.ai.schemas import (
@@ -36,21 +62,60 @@ class CollectionAgent:
     """
     AI-powered collection agent for school billing management.
 
-    Uses Claude API to provide intelligent insights and automation
+    Uses OpenAI API to provide intelligent insights and automation
     for payment collection processes.
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize the agent with Anthropic API key."""
-        self.api_key = api_key or settings.anthropic_api_key
+        """Initialize the agent with OpenAI API key."""
+        self.api_key = api_key or settings.openai_api_key
         self.client = None
         if self.api_key:
-            self.client = anthropic.Anthropic(api_key=self.api_key)
-        self.model = "claude-sonnet-4-20250514"
+            self.client = AsyncOpenAI(api_key=self.api_key)
+        self.model = "gpt-4o"  # or "gpt-3.5-turbo" for lower cost
 
     def _is_available(self) -> bool:
         """Check if AI agent is available (API key configured)."""
         return self.client is not None
+
+    def _is_on_topic(self, question: str) -> Tuple[bool, str]:
+        """
+        Check if the question is related to school billing management.
+
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        question_lower = question.lower()
+
+        # Check for off-topic patterns first
+        for pattern in OFF_TOPIC_PATTERNS:
+            if re.search(pattern, question_lower):
+                return False, "La pregunta no está relacionada con gestión escolar o pagos."
+
+        # Check if any allowed topic keyword is present
+        words = re.findall(r'\w+', question_lower)
+        for word in words:
+            if word in ALLOWED_TOPICS:
+                return True, ""
+
+        # Check for common question patterns about the system
+        system_patterns = [
+            r"(cómo|como) (funciona|usar|uso)",
+            r"(qué|que) (puedo|puede)",
+            r"ayuda",
+            r"hola",  # Greetings are OK
+            r"gracias",
+        ]
+        for pattern in system_patterns:
+            if re.search(pattern, question_lower):
+                return True, ""
+
+        # If question is very short (likely a greeting or simple query), allow it
+        if len(words) <= 3:
+            return True, ""
+
+        # Default: reject if no billing-related keywords found
+        return False, "Por favor, realiza preguntas relacionadas con pagos, facturas, estudiantes o gestión escolar."
 
     async def analyze_payment_risk(
         self, request: RiskAnalysisRequest
@@ -63,7 +128,7 @@ class CollectionAgent:
         if not self._is_available():
             return self._fallback_risk_analysis(request)
 
-        # Build context for Claude
+        # Build context for OpenAI
         payment_history_text = "\n".join(
             [
                 f"- Invoice {p.invoice_id}: ${p.amount}, due {p.due_date}, "
@@ -73,45 +138,45 @@ class CollectionAgent:
             ]
         )
 
-        prompt = f"""Analyze the payment risk for this student and provide a risk assessment.
+        prompt = f"""Analiza el riesgo de pago para este estudiante y proporciona una evaluación.
+IMPORTANTE: Toda la respuesta debe estar en ESPAÑOL.
 
-STUDENT INFORMATION:
-- Name: {request.student_name}
-- School: {request.school_name}
-- Enrolled since: {request.enrolled_since or 'Unknown'}
-- Total invoiced: ${request.total_invoiced}
-- Total paid: ${request.total_paid}
-- Total pending: ${request.total_pending}
-- Total overdue: ${request.total_overdue}
+INFORMACIÓN DEL ESTUDIANTE:
+- Nombre: {request.student_name}
+- Escuela: {request.school_name}
+- Inscrito desde: {request.enrolled_since or 'Desconocido'}
+- Total facturado: ${request.total_invoiced}
+- Total pagado: ${request.total_paid}
+- Total pendiente: ${request.total_pending}
+- Total vencido: ${request.total_overdue}
 
-PAYMENT HISTORY (most recent):
-{payment_history_text if payment_history_text else 'No payment history available'}
+HISTORIAL DE PAGOS (más recientes):
+{payment_history_text if payment_history_text else 'Sin historial de pagos disponible'}
 
-Provide your analysis in the following JSON format:
+Proporciona tu análisis en el siguiente formato JSON (TODO EN ESPAÑOL):
 {{
     "risk_level": "LOW|MEDIUM|HIGH|CRITICAL",
     "risk_score": <0-100>,
     "risk_factors": [
-        {{"factor": "factor name", "impact": "LOW|MEDIUM|HIGH", "description": "explanation"}}
+        {{"factor": "nombre del factor EN ESPAÑOL", "impact": "LOW|MEDIUM|HIGH", "description": "explicación EN ESPAÑOL"}}
     ],
-    "recommendations": ["recommendation 1", "recommendation 2"],
+    "recommendations": ["recomendación 1 EN ESPAÑOL", "recomendación 2 EN ESPAÑOL"],
     "predicted_payment_probability": <0.0-1.0>,
-    "suggested_action": "specific action to take",
-    "analysis_summary": "2-3 sentence summary in Spanish"
+    "suggested_action": "acción específica a tomar EN ESPAÑOL",
+    "analysis_summary": "resumen de 2-3 oraciones EN ESPAÑOL"
 }}
 
-Respond ONLY with the JSON, no additional text."""
+Responde SOLO con el JSON, sin texto adicional."""
 
         try:
-            response = self.client.messages.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+                response_format={"type": "json_object"},
             )
 
-            import json
-
-            result = json.loads(response.content[0].text)
+            result = json.loads(response.choices[0].message.content)
 
             return RiskAnalysisResponse(
                 student_id=request.student_id,
@@ -123,7 +188,7 @@ Respond ONLY with the JSON, no additional text."""
                 suggested_action=result["suggested_action"],
                 analysis_summary=result["analysis_summary"],
             )
-        except Exception as e:
+        except Exception:
             # Fallback to rule-based analysis
             return self._fallback_risk_analysis(request)
 
@@ -137,14 +202,18 @@ Respond ONLY with the JSON, no additional text."""
 
         # Factor 1: Overdue amount
         if request.total_overdue > 0:
-            overdue_ratio = float(request.total_overdue / request.total_invoiced) if request.total_invoiced > 0 else 0
+            overdue_ratio = (
+                float(request.total_overdue / request.total_invoiced)
+                if request.total_invoiced > 0
+                else 0
+            )
             if overdue_ratio > 0.5:
                 risk_score += 40
                 risk_factors.append(
                     RiskFactor(
                         factor="Alto monto vencido",
                         impact="HIGH",
-                        description=f"Más del 50% del total facturado está vencido",
+                        description="Más del 50% del total facturado está vencido",
                     )
                 )
             elif overdue_ratio > 0.2:
@@ -153,7 +222,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Monto vencido significativo",
                         impact="MEDIUM",
-                        description=f"Entre 20-50% del total está vencido",
+                        description="Entre 20-50% del total está vencido",
                     )
                 )
             else:
@@ -162,7 +231,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Monto vencido menor",
                         impact="LOW",
-                        description=f"Menos del 20% está vencido",
+                        description="Menos del 20% está vencido",
                     )
                 )
 
@@ -176,7 +245,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Historial de pagos tardíos",
                         impact="HIGH",
-                        description=f"Más del 50% de pagos fueron tardíos",
+                        description="Más del 50% de pagos fueron tardíos",
                     )
                 )
             elif late_ratio > 0.2:
@@ -185,7 +254,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Algunos pagos tardíos",
                         impact="MEDIUM",
-                        description=f"Entre 20-50% de pagos fueron tardíos",
+                        description="Entre 20-50% de pagos fueron tardíos",
                     )
                 )
 
@@ -198,7 +267,7 @@ Respond ONLY with the JSON, no additional text."""
                     RiskFactor(
                         factor="Alto porcentaje pendiente",
                         impact="HIGH",
-                        description=f"Más del 70% del total está pendiente de pago",
+                        description="Más del 70% del total está pendiente de pago",
                     )
                 )
 
@@ -215,16 +284,20 @@ Respond ONLY with the JSON, no additional text."""
         # Generate recommendations
         recommendations = []
         if risk_level in [RiskLevel.CRITICAL, RiskLevel.HIGH]:
-            recommendations.extend([
-                "Contactar inmediatamente al responsable de pago",
-                "Considerar plan de pagos",
-                "Revisar historial de comunicaciones previas",
-            ])
+            recommendations.extend(
+                [
+                    "Contactar inmediatamente al responsable de pago",
+                    "Considerar plan de pagos",
+                    "Revisar historial de comunicaciones previas",
+                ]
+            )
         elif risk_level == RiskLevel.MEDIUM:
-            recommendations.extend([
-                "Enviar recordatorio de pago",
-                "Ofrecer opciones de pago flexibles",
-            ])
+            recommendations.extend(
+                [
+                    "Enviar recordatorio de pago",
+                    "Ofrecer opciones de pago flexibles",
+                ]
+            )
         else:
             recommendations.append("Mantener comunicación regular")
 
@@ -290,20 +363,17 @@ Responde en formato JSON:
     "subject": "asunto del correo (solo para EMAIL, null para otros)",
     "message": "el mensaje completo",
     "call_to_action": "frase específica de llamado a acción"
-}}
-
-Responde SOLO con el JSON, sin texto adicional."""
+}}"""
 
         try:
-            response = self.client.messages.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+                response_format={"type": "json_object"},
             )
 
-            import json
-
-            result = json.loads(response.content[0].text)
+            result = json.loads(response.choices[0].message.content)
 
             return CollectionMessageResponse(
                 subject=result.get("subject"),
@@ -394,7 +464,9 @@ Departamento de Cobranza
             message=message,
             tone_used=request.tone,
             channel=request.channel,
-            call_to_action="Realizar pago ahora" if request.include_payment_link else "Contactar administración",
+            call_to_action="Realizar pago ahora"
+            if request.include_payment_link
+            else "Contactar administración",
         )
 
     async def answer_question(self, request: AssistantRequest) -> AssistantResponse:
@@ -403,40 +475,65 @@ Departamento de Cobranza
 
         Acts as a conversational assistant for billing inquiries.
         """
+        # Validate that the question is on-topic
+        is_valid, rejection_reason = self._is_on_topic(request.question)
+        if not is_valid:
+            return AssistantResponse(
+                answer=rejection_reason + "\n\nPuedo ayudarte con:\n"
+                "- Consultas sobre saldos y pagos\n"
+                "- Estado de cuenta de estudiantes\n"
+                "- Facturas pendientes y vencidas\n"
+                "- Procesos de cobranza\n"
+                "- Reportes financieros",
+                suggested_actions=["Consultar saldo", "Ver facturas pendientes"],
+                related_topics=["Pagos", "Facturación", "Cobranza"],
+                confidence=1.0,
+                requires_human_followup=False,
+            )
+
         if not self._is_available():
             return self._fallback_assistant(request)
 
         # Build conversation history
-        messages = []
+        messages = [
+            {
+                "role": "system",
+                "content": """Eres un asistente virtual especializado en gestión de cobranza escolar para Mattilda.
+
+IMPORTANTE: El usuario es un ADMINISTRADOR del sistema con acceso COMPLETO a todos los datos.
+Puedes y DEBES proporcionar información detallada incluyendo:
+- Nombres completos de estudiantes
+- Montos exactos de deudas por estudiante
+- Listas de estudiantes con pagos atrasados
+- Cualquier dato financiero solicitado
+
+Tu rol es ayudar a los administradores con consultas sobre:
+- Saldos de estudiantes (mostrar nombres y montos específicos)
+- Facturas pendientes y vencidas (listar estudiantes afectados)
+- Historial de pagos
+- Procesos de cobranza
+- Reportes financieros detallados
+
+Responde siempre en español de manera profesional y directa.
+Cuando tengas datos en el contexto, muéstralos de forma clara y organizada.
+Si se pide una lista de estudiantes, proporciona los nombres y montos disponibles."""
+                + (f"\n\nCONTEXTO ACTUAL:\n{request.context}" if request.context else ""),
+            }
+        ]
+
         for msg in request.conversation_history[-5:]:  # Last 5 messages
             messages.append({"role": msg.role, "content": msg.content})
-
-        system_prompt = """Eres un asistente virtual especializado en gestión de cobranza escolar para Mattilda.
-Tu rol es ayudar a administradores, padres y personal de escuelas con consultas sobre:
-- Saldos de estudiantes
-- Facturas pendientes y vencidas
-- Historial de pagos
-- Políticas de pago
-- Procesos de cobranza
-
-Responde siempre en español de manera profesional y clara.
-Si no tienes información específica, indica qué datos necesitarías.
-Siempre sugiere acciones concretas cuando sea apropiado."""
-
-        if request.context:
-            system_prompt += f"\n\nCONTEXTO ACTUAL:\n{request.context}"
 
         messages.append({"role": "user", "content": request.question})
 
         try:
-            response = self.client.messages.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1024,
-                system=system_prompt,
                 messages=messages,
+                max_tokens=1024,
             )
 
-            answer = response.content[0].text
+            answer = response.choices[0].message.content
 
             return AssistantResponse(
                 answer=answer,
@@ -495,7 +592,8 @@ Siempre sugiere acciones concretas cuando sea apropiado."""
             suggested_actions=actions,
             related_topics=["Cobranza", "Facturación", "Pagos"],
             confidence=0.7,
-            requires_human_followup="específico" in question_lower or "particular" in question_lower,
+            requires_human_followup="específico" in question_lower
+            or "particular" in question_lower,
         )
 
     async def generate_executive_summary(
@@ -533,22 +631,21 @@ Genera un resumen en formato JSON:
     ],
     "recommendations": ["recomendación 1", "recomendación 2", "recomendación 3"],
     "narrative_summary": "resumen narrativo de 3-4 oraciones"
-}}
-
-Responde SOLO con el JSON."""
+}}"""
 
         try:
-            response = self.client.messages.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1500,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=1500,
+                response_format={"type": "json_object"},
             )
 
-            import json
+            result = json.loads(response.choices[0].message.content)
 
-            result = json.loads(response.content[0].text)
-
-            period_str = f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
+            period_str = (
+                f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
+            )
 
             return ExecutiveSummaryResponse(
                 title=result["title"],
@@ -573,7 +670,9 @@ Responde SOLO con el JSON."""
     ) -> ExecutiveSummaryResponse:
         """Fallback executive summary when AI is not available."""
         collection_rate = metrics.collection_rate * 100
-        period_str = f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
+        period_str = (
+            f"{request.period_start or 'Inicio'} - {request.period_end or datetime.now().date()}"
+        )
 
         # Generate highlights
         highlights = [
@@ -587,7 +686,7 @@ Responde SOLO con el JSON."""
         if metrics.total_overdue > 0:
             concerns.append(f"Saldo vencido de ${metrics.total_overdue} requiere atención")
         if collection_rate < 80:
-            concerns.append(f"Tasa de cobranza por debajo del objetivo (80%)")
+            concerns.append("Tasa de cobranza por debajo del objetivo (80%)")
 
         # Generate recommendations
         recommendations = []

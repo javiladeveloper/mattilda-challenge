@@ -26,7 +26,7 @@ from sqlalchemy import String, Boolean, DateTime, Date, ForeignKey, Numeric, Tex
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from src.domain.enums import InvoiceStatus, PaymentMethod
+from src.domain.enums import InvoiceStatus, PaymentMethod, InvoiceType
 
 
 class Base(DeclarativeBase):
@@ -109,9 +109,168 @@ class School(Base):
         lazy="selectin",
         doc="List of students enrolled in this school",
     )
+    grades: Mapped[List["Grade"]] = relationship(
+        "Grade",
+        back_populates="school",
+        lazy="selectin",
+        doc="List of grades/levels offered by this school",
+    )
+    billing_items: Mapped[List["BillingItem"]] = relationship(
+        "BillingItem",
+        back_populates="school",
+        lazy="selectin",
+        doc="List of billing items configured for this school",
+    )
 
     def __repr__(self) -> str:
         return f"<School(id={self.id}, name='{self.name}')>"
+
+
+class Grade(Base):
+    """
+    Grade entity representing an academic level/grade in a school.
+
+    Each grade has its own monthly tuition fee. Students are assigned
+    to a grade, and their monthly invoices are generated based on
+    the grade's tuition fee.
+
+    Attributes:
+        id: Unique identifier (UUID v4)
+        school_id: Foreign key to schools table (required)
+        name: Grade name (e.g., "1st Grade", "5to Primaria")
+        monthly_fee: Monthly tuition amount for this grade
+        is_active: Soft delete flag (default True)
+        created_at: Record creation timestamp
+        updated_at: Last modification timestamp
+    """
+
+    __tablename__ = "grades"
+    __table_args__ = (
+        Index("ix_grades_school_id", "school_id"),
+        Index("ix_grades_is_active", "is_active"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="Unique identifier for the grade",
+    )
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("schools.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Reference to the school this grade belongs to",
+    )
+    name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="Grade name (e.g., '5th Grade', '1ero Secundaria')"
+    )
+    monthly_fee: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, comment="Monthly tuition fee for this grade"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, comment="Soft delete flag"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        comment="Timestamp when the record was created",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Timestamp when the record was last updated",
+    )
+
+    # Relationships
+    school: Mapped["School"] = relationship(
+        "School", back_populates="grades", doc="The school this grade belongs to"
+    )
+    students: Mapped[List["Student"]] = relationship(
+        "Student", back_populates="grade_ref", doc="Students in this grade"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Grade(id={self.id}, name='{self.name}', monthly_fee={self.monthly_fee})>"
+
+
+class BillingItem(Base):
+    """
+    BillingItem entity representing a configurable billing item/fee.
+
+    Schools can configure various billing items like enrollment fees,
+    food services, transportation, materials, etc. These items can be
+    one-time or recurring charges.
+
+    Attributes:
+        id: Unique identifier (UUID v4)
+        school_id: Foreign key to schools table (required)
+        name: Item name (e.g., "Matrícula 2024", "Alimentación")
+        description: Detailed description (optional)
+        amount: Default amount for this item
+        is_recurring: Whether this is a recurring monthly charge
+        academic_year: For year-specific items like enrollment (optional)
+        is_active: Soft delete flag (default True)
+        created_at: Record creation timestamp
+        updated_at: Last modification timestamp
+    """
+
+    __tablename__ = "billing_items"
+    __table_args__ = (
+        Index("ix_billing_items_school_id", "school_id"),
+        Index("ix_billing_items_is_active", "is_active"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="Unique identifier for the billing item",
+    )
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("schools.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Reference to the school this item belongs to",
+    )
+    name: Mapped[str] = mapped_column(
+        String(200), nullable=False, comment="Item name (e.g., 'Enrollment 2024', 'Lunch Service')"
+    )
+    description: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="Detailed description of the billing item"
+    )
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, comment="Default amount for this item"
+    )
+    is_recurring: Mapped[bool] = mapped_column(
+        Boolean, default=False, comment="Whether this is a recurring monthly charge"
+    )
+    academic_year: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, comment="Academic year (e.g., '2024', '2024-2025')"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, comment="Soft delete flag"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        comment="Timestamp when the record was created",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Timestamp when the record was last updated",
+    )
+
+    # Relationships
+    school: Mapped["School"] = relationship(
+        "School", back_populates="billing_items", doc="The school this item belongs to"
+    )
+
+    def __repr__(self) -> str:
+        return f"<BillingItem(id={self.id}, name='{self.name}', amount={self.amount})>"
 
 
 class Student(Base):
@@ -155,6 +314,7 @@ class Student(Base):
         Index("ix_students_school_id", "school_id"),
         Index("ix_students_is_active", "is_active"),
         Index("ix_students_school_active", "school_id", "is_active"),
+        Index("ix_students_grade_id", "grade_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -169,6 +329,12 @@ class Student(Base):
         nullable=False,
         comment="Reference to the school where student is enrolled",
     )
+    grade_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("grades.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Reference to the student's grade/level",
+    )
     first_name: Mapped[str] = mapped_column(
         String(100), nullable=False, comment="Student's first name"
     )
@@ -179,7 +345,7 @@ class Student(Base):
         String(255), nullable=True, comment="Student or parent/guardian email"
     )
     grade: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True, comment="Current grade or level (e.g., '5th Grade', 'Senior')"
+        String(50), nullable=True, comment="[DEPRECATED] Use grade_id instead. Legacy grade text field."
     )
     enrolled_at: Mapped[date] = mapped_column(
         Date, server_default=func.current_date(), comment="Date when the student was enrolled"
@@ -203,6 +369,9 @@ class Student(Base):
     school: Mapped["School"] = relationship(
         "School", back_populates="students", doc="The school where this student is enrolled"
     )
+    grade_ref: Mapped[Optional["Grade"]] = relationship(
+        "Grade", back_populates="students", lazy="selectin", doc="The grade/level this student is in"
+    )
     invoices: Mapped[List["Invoice"]] = relationship(
         "Invoice",
         back_populates="student",
@@ -214,6 +383,13 @@ class Student(Base):
     def full_name(self) -> str:
         """Return the student's full name."""
         return f"{self.first_name} {self.last_name}"
+
+    @property
+    def grade_name(self) -> Optional[str]:
+        """Return the grade name from grade_ref or legacy grade field."""
+        if self.grade_ref:
+            return self.grade_ref.name
+        return self.grade
 
     def __repr__(self) -> str:
         return f"<Student(id={self.id}, name='{self.full_name}')>"
@@ -269,6 +445,7 @@ class Invoice(Base):
         Index("ix_invoices_status", "status"),
         Index("ix_invoices_due_date", "due_date"),
         Index("ix_invoices_student_status", "student_id", "status"),
+        Index("ix_invoices_invoice_type", "invoice_type"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -282,6 +459,17 @@ class Invoice(Base):
         ForeignKey("students.id", ondelete="RESTRICT"),
         nullable=False,
         comment="Reference to the student being billed",
+    )
+    billing_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("billing_items.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Reference to the billing item (for FEE/ENROLLMENT types)",
+    )
+    invoice_type: Mapped[InvoiceType] = mapped_column(
+        String(20),
+        default=InvoiceType.CUSTOM,
+        comment="Invoice type: TUITION, ENROLLMENT, FEE, CUSTOM",
     )
     amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, comment="Total invoice amount (max: 9,999,999,999.99)"
@@ -310,6 +498,9 @@ class Invoice(Base):
     # Relationships
     student: Mapped["Student"] = relationship(
         "Student", back_populates="invoices", doc="The student this invoice belongs to"
+    )
+    billing_item: Mapped[Optional["BillingItem"]] = relationship(
+        "BillingItem", doc="The billing item this invoice is based on (if applicable)"
     )
     payments: Mapped[List["Payment"]] = relationship(
         "Payment",

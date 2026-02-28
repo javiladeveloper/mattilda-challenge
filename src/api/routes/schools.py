@@ -6,6 +6,8 @@ import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.api.dependencies import get_school_service, get_student_service
+from src.api.auth.jwt import require_auth
+from src.api.auth.models import TokenData
 from src.api.schemas.school import (
     SchoolCreate,
     SchoolUpdate,
@@ -31,6 +33,7 @@ async def list_schools(
     page_size: int = Query(10, ge=1, le=100),
     active_only: bool = Query(False),
     service: SchoolService = Depends(get_school_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     skip = (page - 1) * page_size
     schools = await service.get_all(skip=skip, limit=page_size, active_only=active_only)
@@ -50,6 +53,7 @@ async def list_schools(
 async def get_school(
     school_id: UUID,
     service: SchoolService = Depends(get_school_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         school = await service.get_by_id(school_id)
@@ -62,6 +66,7 @@ async def get_school(
 async def create_school(
     data: SchoolCreate,
     service: SchoolService = Depends(get_school_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     school = await service.create(data.model_dump())
     return SchoolResponse.model_validate(school)
@@ -72,6 +77,7 @@ async def update_school(
     school_id: UUID,
     data: SchoolUpdate,
     service: SchoolService = Depends(get_school_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         school = await service.update(school_id, data.model_dump(exclude_unset=True))
@@ -84,6 +90,7 @@ async def update_school(
 async def delete_school(
     school_id: UUID,
     service: SchoolService = Depends(get_school_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         school = await service.delete(school_id)
@@ -100,6 +107,7 @@ async def list_school_students(
     active_only: bool = Query(True),
     school_service: SchoolService = Depends(get_school_service),
     student_service: StudentService = Depends(get_student_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     # Verify school exists
     try:
@@ -115,7 +123,7 @@ async def list_school_students(
     pages = math.ceil(total / page_size) if total > 0 else 1
 
     return StudentListResponse(
-        items=[StudentResponse.model_validate(s) for s in students],
+        items=[StudentResponse.from_student(s) for s in students],
         total=total,
         page=page,
         page_size=page_size,
@@ -129,6 +137,7 @@ async def get_school_statement(
     from_date: Optional[date] = Query(None),
     to_date: Optional[date] = Query(None),
     service: SchoolService = Depends(get_school_service),
+    _current_user: TokenData = Depends(require_auth),
 ):
     try:
         statement = await service.get_statement(school_id, from_date, to_date)

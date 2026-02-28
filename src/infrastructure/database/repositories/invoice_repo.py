@@ -73,3 +73,23 @@ class InvoiceRepository(BaseRepository[Invoice]):
             count += 1
         await self.session.flush()
         return count
+
+    async def get_overdue_by_school(self, school_id: UUID, limit: int = 50) -> List[Invoice]:
+        """Get overdue invoices for a school with eager-loaded student."""
+        today = date.today()
+        query = (
+            select(Invoice)
+            .options(selectinload(Invoice.student))
+            .join(Student, Invoice.student_id == Student.id)
+            .where(
+                and_(
+                    Student.school_id == school_id,
+                    Invoice.due_date < today,
+                    Invoice.status.in_([InvoiceStatus.PENDING, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]),
+                )
+            )
+            .order_by(Invoice.due_date)
+            .limit(limit)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
