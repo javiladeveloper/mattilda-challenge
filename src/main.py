@@ -41,18 +41,13 @@ def custom_openapi():
             "scheme": "bearer",
             "bearerFormat": "JWT",
             "description": "JWT Token. Use {{access_token}} in Postman. Get token from POST /api/v1/auth/login",
-            "x-bearer-format": "{{access_token}}"
+            "x-bearer-format": "{{access_token}}",
         },
         "OAuth2PasswordBearer": {
             "type": "oauth2",
-            "flows": {
-                "password": {
-                    "tokenUrl": "/api/v1/auth/login",
-                    "scopes": {}
-                }
-            },
-            "description": "OAuth2 Password Flow. Username: admin, Password: admin123"
-        }
+            "flows": {"password": {"tokenUrl": "/api/v1/auth/login", "scopes": {}}},
+            "description": "OAuth2 Password Flow. Username: admin, Password: admin123",
+        },
     }
 
     # Add Postman collection variables hint
@@ -61,13 +56,9 @@ def custom_openapi():
             "key": "access_token",
             "value": "",
             "type": "string",
-            "description": "JWT access token from login endpoint"
+            "description": "JWT access token from login endpoint",
         },
-        {
-            "key": "base_url",
-            "value": "http://localhost:8000",
-            "type": "string"
-        }
+        {"key": "base_url", "value": "http://localhost:8000", "type": "string"},
     ]
 
     # Apply security globally to all endpoints (except auth endpoints)

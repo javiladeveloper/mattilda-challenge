@@ -5,7 +5,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.database.models import Student
-from src.infrastructure.database.repositories import StudentRepository, SchoolRepository, GradeRepository
+from src.infrastructure.database.repositories import (
+    StudentRepository,
+    SchoolRepository,
+    GradeRepository,
+)
 from src.domain.exceptions import EntityNotFoundError, BusinessRuleError
 from src.domain.enums import InvoiceStatus
 from src.application.dto.statements import (
@@ -61,9 +65,7 @@ class StudentService:
             if not grade:
                 raise EntityNotFoundError("Grade", grade_id)
             if grade.school_id != school_id:
-                raise BusinessRuleError(
-                    f"Grade {grade_id} does not belong to school {school_id}"
-                )
+                raise BusinessRuleError(f"Grade {grade_id} does not belong to school {school_id}")
 
         return await self.repo.create(data)
 

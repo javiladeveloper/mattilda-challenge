@@ -7,11 +7,17 @@ from pydantic import BaseModel, Field
 
 
 class BillingItemBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200, description="Item name (e.g., 'Enrollment 2024')")
+    name: str = Field(
+        ..., min_length=1, max_length=200, description="Item name (e.g., 'Enrollment 2024')"
+    )
     description: Optional[str] = Field(None, description="Detailed description of the item")
     amount: Decimal = Field(..., gt=0, description="Amount for this item")
-    is_recurring: bool = Field(default=False, description="Whether this is a recurring monthly charge")
-    academic_year: Optional[str] = Field(None, max_length=20, description="Academic year (e.g., '2024')")
+    is_recurring: bool = Field(
+        default=False, description="Whether this is a recurring monthly charge"
+    )
+    academic_year: Optional[str] = Field(
+        None, max_length=20, description="Academic year (e.g., '2024')"
+    )
 
 
 class BillingItemCreate(BillingItemBase):

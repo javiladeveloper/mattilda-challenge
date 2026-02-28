@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 
 
 class GradeBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, description="Grade name (e.g., '5th Grade')")
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Grade name (e.g., '5th Grade')"
+    )
     monthly_fee: Decimal = Field(..., gt=0, description="Monthly tuition fee for this grade")
 
 

@@ -85,7 +85,9 @@ class InvoiceRepository(BaseRepository[Invoice]):
                 and_(
                     Student.school_id == school_id,
                     Invoice.due_date < today,
-                    Invoice.status.in_([InvoiceStatus.PENDING, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]),
+                    Invoice.status.in_(
+                        [InvoiceStatus.PENDING, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]
+                    ),
                 )
             )
             .order_by(Invoice.due_date)

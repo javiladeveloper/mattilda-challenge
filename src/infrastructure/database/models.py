@@ -168,9 +168,7 @@ class Grade(Base):
     monthly_fee: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, comment="Monthly tuition fee for this grade"
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, comment="Soft delete flag"
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, comment="Soft delete flag")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -249,9 +247,7 @@ class BillingItem(Base):
     academic_year: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True, comment="Academic year (e.g., '2024', '2024-2025')"
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, comment="Soft delete flag"
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, comment="Soft delete flag")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -345,7 +341,9 @@ class Student(Base):
         String(255), nullable=True, comment="Student or parent/guardian email"
     )
     grade: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True, comment="[DEPRECATED] Use grade_id instead. Legacy grade text field."
+        String(50),
+        nullable=True,
+        comment="[DEPRECATED] Use grade_id instead. Legacy grade text field.",
     )
     enrolled_at: Mapped[date] = mapped_column(
         Date, server_default=func.current_date(), comment="Date when the student was enrolled"
@@ -370,7 +368,10 @@ class Student(Base):
         "School", back_populates="students", doc="The school where this student is enrolled"
     )
     grade_ref: Mapped[Optional["Grade"]] = relationship(
-        "Grade", back_populates="students", lazy="selectin", doc="The grade/level this student is in"
+        "Grade",
+        back_populates="students",
+        lazy="selectin",
+        doc="The grade/level this student is in",
     )
     invoices: Mapped[List["Invoice"]] = relationship(
         "Invoice",
