@@ -40,7 +40,7 @@ class BillingItemRepository(BaseRepository[BillingItem]):
             BillingItem.academic_year == academic_year,
         )
         if active_only:
-            query = query.where(BillingItem.is_active == True)
+            query = query.where(BillingItem.is_active.is_(True))
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
@@ -49,7 +49,7 @@ class BillingItemRepository(BaseRepository[BillingItem]):
         query = select(BillingItem).where(
             BillingItem.school_id == school_id,
             BillingItem.name == name,
-            BillingItem.is_active == True,
+            BillingItem.is_active.is_(True),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
