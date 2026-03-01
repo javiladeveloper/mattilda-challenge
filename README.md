@@ -49,30 +49,50 @@ Backend system for school billing management built with FastAPI, PostgreSQL, and
 
 ```
 ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│     SCHOOL      │       │     STUDENT     │       │     INVOICE     │
+│     SCHOOL      │       │     GRADE       │       │  BILLING_ITEM   │
 ├─────────────────┤       ├─────────────────┤       ├─────────────────┤
-│ id (PK)         │──┐    │ id (PK)         │──┐    │ id (PK)         │
-│ name            │  │    │ school_id (FK)  │  │    │ student_id (FK) │
-│ address         │  └───>│ first_name      │  └───>│ amount          │
-│ phone           │       │ last_name       │       │ due_date        │
-│ email           │       │ email           │       │ status          │
-│ created_at      │       │ grade           │       │ description     │
-│ updated_at      │       │ enrolled_at     │       │ created_at      │
-│ is_active       │       │ is_active       │       │ updated_at      │
-└─────────────────┘       └─────────────────┘       └────────┬────────┘
-                                                             │
-                                                             │
-                                                    ┌────────┴────────┐
-                                                    │     PAYMENT     │
-                                                    ├─────────────────┤
-                                                    │ id (PK)         │
-                                                    │ invoice_id (FK) │
-                                                    │ amount          │
-                                                    │ payment_date    │
-                                                    │ method          │
-                                                    │ reference       │
-                                                    │ created_at      │
-                                                    └─────────────────┘
+│ id (PK)         │──┬───>│ id (PK)         │       │ id (PK)         │
+│ name            │  │    │ school_id (FK)  │       │ school_id (FK)  │
+│ address         │  │    │ name            │       │ name            │
+│ phone           │  │    │ monthly_fee     │       │ amount          │
+│ email           │  │    │ is_active       │       │ is_recurring    │
+│ is_active       │  │    └────────┬────────┘       │ is_active       │
+└─────────────────┘  │             │                └────────┬────────┘
+                     │             │ 1:N                     │
+                     │ 1:N         ▼                         │ 0:N
+                     │    ┌─────────────────┐                │
+                     └───>│     STUDENT     │                │
+                          ├─────────────────┤                │
+                          │ id (PK)         │──┐             │
+                          │ school_id (FK)  │  │             │
+                          │ grade_id (FK)   │  │             │
+                          │ first_name      │  │             │
+                          │ last_name       │  │ 1:N         │
+                          │ email           │  │             │
+                          │ is_active       │  │             │
+                          └─────────────────┘  │             │
+                                               ▼             │
+                                      ┌─────────────────┐    │
+                                      │     INVOICE     │◄───┘
+                                      ├─────────────────┤
+                                      │ id (PK)         │
+                                      │ student_id (FK) │
+                                      │ billing_item_id │
+                                      │ invoice_type    │
+                                      │ amount          │
+                                      │ status          │
+                                      └────────┬────────┘
+                                               │ 1:N
+                                               ▼
+                                      ┌─────────────────┐
+                                      │     PAYMENT     │
+                                      ├─────────────────┤
+                                      │ id (PK)         │
+                                      │ invoice_id (FK) │
+                                      │ amount          │
+                                      │ payment_date    │
+                                      │ method          │
+                                      └─────────────────┘
 ```
 
 ### Invoice Status Flow
@@ -202,6 +222,24 @@ docker-compose exec api python scripts/seed.py
 | GET | `/api/v1/payments` | List all payments |
 | POST | `/api/v1/payments` | Register payment |
 | GET | `/api/v1/payments/invoice/{id}` | Payments for invoice |
+
+### Grades
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/grades` | List all grades (filterable by school) |
+| GET | `/api/v1/grades/{id}` | Get grade by ID |
+| POST | `/api/v1/grades` | Create new grade with monthly fee |
+| PUT | `/api/v1/grades/{id}` | Update grade |
+| DELETE | `/api/v1/grades/{id}` | Soft delete grade |
+
+### Billing Items
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/billing-items` | List billing items (filterable by school) |
+| GET | `/api/v1/billing-items/{id}` | Get billing item by ID |
+| POST | `/api/v1/billing-items` | Create new billing item |
+| PUT | `/api/v1/billing-items/{id}` | Update billing item |
+| DELETE | `/api/v1/billing-items/{id}` | Soft delete billing item |
 
 ### Reports (Database Views)
 | Method | Endpoint | Description |
