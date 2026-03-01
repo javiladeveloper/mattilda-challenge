@@ -60,3 +60,7 @@ Thumbs.db
 
 # VS Code AI rules
 .github/instructions/codacy.instructions.md
+
+# Claude instructions (local only)
+CLAUDE.md
+DATABASE.md
