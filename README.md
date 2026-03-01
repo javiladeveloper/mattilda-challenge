@@ -45,83 +45,191 @@ Backend system for school billing management built with FastAPI, PostgreSQL, and
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Data Model (ERD)
+## Database Design
 
+### Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    SCHOOLS ||--o{ STUDENTS : "has many"
+    SCHOOLS ||--o{ GRADES : "has many"
+    SCHOOLS ||--o{ BILLING_ITEMS : "has many"
+    GRADES ||--o{ STUDENTS : "has many"
+    STUDENTS ||--o{ INVOICES : "has many"
+    INVOICES ||--o{ PAYMENTS : "has many"
+    BILLING_ITEMS ||--o{ INVOICES : "referenced by"
+
+    SCHOOLS {
+        uuid id PK
+        varchar name
+        varchar address
+        varchar phone
+        varchar email
+        boolean is_active
+        timestamp created_at
+    }
+
+    GRADES {
+        uuid id PK
+        uuid school_id FK
+        varchar name
+        decimal monthly_fee
+        boolean is_active
+    }
+
+    BILLING_ITEMS {
+        uuid id PK
+        uuid school_id FK
+        varchar name
+        decimal amount
+        boolean is_recurring
+    }
+
+    STUDENTS {
+        uuid id PK
+        uuid school_id FK
+        uuid grade_id FK
+        varchar first_name
+        varchar last_name
+        varchar email
+        boolean is_active
+    }
+
+    INVOICES {
+        uuid id PK
+        uuid student_id FK
+        uuid billing_item_id FK
+        varchar invoice_type
+        decimal amount
+        date due_date
+        varchar status
+    }
+
+    PAYMENTS {
+        uuid id PK
+        uuid invoice_id FK
+        decimal amount
+        date payment_date
+        varchar method
+    }
+
+    USERS {
+        uuid id PK
+        varchar username
+        varchar email
+        varchar hashed_password
+        boolean is_active
+    }
 ```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│     SCHOOL      │       │     GRADE       │       │  BILLING_ITEM   │
-├─────────────────┤       ├─────────────────┤       ├─────────────────┤
-│ id (PK)         │──┬───>│ id (PK)         │       │ id (PK)         │
-│ name            │  │    │ school_id (FK)  │       │ school_id (FK)  │
-│ address         │  │    │ name            │       │ name            │
-│ phone           │  │    │ monthly_fee     │       │ amount          │
-│ email           │  │    │ is_active       │       │ is_recurring    │
-│ is_active       │  │    └────────┬────────┘       │ is_active       │
-└─────────────────┘  │             │                └────────┬────────┘
-                     │             │ 1:N                     │
-                     │ 1:N         ▼                         │ 0:N
-                     │    ┌─────────────────┐                │
-                     └───>│     STUDENT     │                │
-                          ├─────────────────┤                │
-                          │ id (PK)         │──┐             │
-                          │ school_id (FK)  │  │             │
-                          │ grade_id (FK)   │  │             │
-                          │ first_name      │  │             │
-                          │ last_name       │  │ 1:N         │
-                          │ email           │  │             │
-                          │ is_active       │  │             │
-                          └─────────────────┘  │             │
-                                               ▼             │
-                                      ┌─────────────────┐    │
-                                      │     INVOICE     │◄───┘
-                                      ├─────────────────┤
-                                      │ id (PK)         │
-                                      │ student_id (FK) │
-                                      │ billing_item_id │
-                                      │ invoice_type    │
-                                      │ amount          │
-                                      │ status          │
-                                      └────────┬────────┘
-                                               │ 1:N
-                                               ▼
-                                      ┌─────────────────┐
-                                      │     PAYMENT     │
-                                      ├─────────────────┤
-                                      │ id (PK)         │
-                                      │ invoice_id (FK) │
-                                      │ amount          │
-                                      │ payment_date    │
-                                      │ method          │
-                                      └─────────────────┘
-```
+
+### Database Tables
+
+#### schools
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `name` | VARCHAR(255) | School name |
+| `address` | VARCHAR(500) | Physical address |
+| `phone` | VARCHAR(50) | Contact phone |
+| `email` | VARCHAR(255) | Contact email |
+| `is_active` | BOOLEAN | Soft delete flag |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
+
+#### grades
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `school_id` | UUID | FK → schools.id |
+| `name` | VARCHAR(100) | Grade name (e.g., "5th Grade") |
+| `monthly_fee` | NUMERIC(12,2) | Monthly tuition fee |
+| `is_active` | BOOLEAN | Soft delete flag |
+
+#### billing_items
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `school_id` | UUID | FK → schools.id |
+| `name` | VARCHAR(200) | Item name |
+| `description` | TEXT | Detailed description |
+| `amount` | NUMERIC(12,2) | Default amount |
+| `is_recurring` | BOOLEAN | Monthly recurring charge |
+| `academic_year` | VARCHAR(20) | Academic year (e.g., "2024-2025") |
+
+#### students
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `school_id` | UUID | FK → schools.id |
+| `grade_id` | UUID | FK → grades.id |
+| `first_name` | VARCHAR(100) | First name |
+| `last_name` | VARCHAR(100) | Last name |
+| `email` | VARCHAR(255) | Contact email |
+| `enrolled_at` | DATE | Enrollment date |
+| `is_active` | BOOLEAN | Soft delete flag |
+
+#### invoices
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `student_id` | UUID | FK → students.id |
+| `billing_item_id` | UUID | FK → billing_items.id (optional) |
+| `invoice_type` | VARCHAR(20) | TUITION, ENROLLMENT, FEE, CUSTOM |
+| `amount` | NUMERIC(12,2) | Invoice amount |
+| `due_date` | DATE | Payment due date |
+| `status` | VARCHAR(20) | PENDING, PARTIAL, PAID, OVERDUE, CANCELLED |
+| `description` | TEXT | Charge description |
+
+#### payments
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `invoice_id` | UUID | FK → invoices.id |
+| `amount` | NUMERIC(12,2) | Payment amount |
+| `payment_date` | DATE | Payment date |
+| `method` | VARCHAR(20) | CASH, BANK_TRANSFER, CREDIT_CARD, DEBIT_CARD, OTHER |
+| `reference` | VARCHAR(255) | External reference |
+
+#### users
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `username` | VARCHAR(100) | Login username (unique) |
+| `email` | VARCHAR(255) | Email address (unique) |
+| `hashed_password` | VARCHAR(255) | Bcrypt hash |
+| `is_active` | BOOLEAN | Account active |
 
 ### Invoice Status Flow
 
-```
-    ┌──────────┐
-    │ PENDING  │ ◄─── New invoice created
-    └────┬─────┘
-         │ Partial payment
-         ▼
-    ┌──────────┐
-    │ PARTIAL  │ ◄─── Some payments made
-    └────┬─────┘
-         │ Full payment
-         ▼
-    ┌──────────┐
-    │   PAID   │ ◄─── Total paid >= amount
-    └──────────┘
-
-    ┌──────────┐
-    │ OVERDUE  │ ◄─── Past due date, not fully paid
-    └──────────┘
-
-    ┌──────────┐
-    │CANCELLED │ ◄─── Invoice voided
-    └──────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: Invoice Created
+    PENDING --> PARTIAL: Partial Payment
+    PENDING --> PAID: Full Payment
+    PENDING --> OVERDUE: Past Due Date
+    PENDING --> CANCELLED: Voided
+    PARTIAL --> PAID: Remaining Paid
+    PARTIAL --> OVERDUE: Past Due Date
+    OVERDUE --> PARTIAL: Partial Payment
+    OVERDUE --> PAID: Full Payment
+    PAID --> [*]
+    CANCELLED --> [*]
 ```
 
-### Database Design Decisions
+### Database Views (Reports)
+
+The database includes pre-built views for reporting, exposed via `/api/v1/reports/*`:
+
+| View | Endpoint | Description |
+|------|----------|-------------|
+| `v_student_balance` | `/reports/students/balance` | Current financial balance per student |
+| `v_school_summary` | `/reports/schools/summary` | Financial summary by school |
+| `v_invoice_details` | `/reports/invoices/details` | Complete invoice information |
+| `v_payment_history` | `/reports/payments/history` | Payment history with details |
+| `v_overdue_invoices` | `/reports/invoices/overdue` | Overdue invoices for collections |
+| `v_daily_collections` | `/reports/collections/daily` | Daily payments by school |
+| `v_monthly_revenue` | `/reports/revenue/monthly` | Monthly revenue statistics |
+
+### Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
@@ -133,7 +241,15 @@ Backend system for school billing management built with FastAPI, PostgreSQL, and
 | **Immutable Payments** | Financial audit compliance, no accidental modifications |
 | **Composite Indexes** | Optimized for common query patterns |
 
-**Full documentation:** See [DATABASE.md](DATABASE.md) for complete schema, indexes, and query examples.
+### Migrations
+
+Migrations are managed with Alembic in `alembic/versions/`:
+
+1. `001_initial_migration.py` - Creates schools, students, invoices, payments
+2. `002_add_users_table.py` - Adds users table for authentication
+3. `003_add_report_views.py` - Creates database views for reporting
+4. `1c309ae71d2f_add_grades_and_billing_items.py` - Adds grades and billing_items
+5. `004_update_report_views.py` - Updates views to use grades table
 
 ## Quick Start
 
