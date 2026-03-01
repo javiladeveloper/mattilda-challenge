@@ -11,10 +11,25 @@ This agent provides:
 import json
 import re
 from datetime import datetime
-from decimal import Decimal
 from typing import Optional, Tuple
 
 from openai import AsyncOpenAI
+
+from src.config import settings
+from src.ai.schemas import (
+    RiskLevel,
+    RiskAnalysisRequest,
+    RiskAnalysisResponse,
+    RiskFactor,
+    CollectionMessageRequest,
+    CollectionMessageResponse,
+    AssistantRequest,
+    AssistantResponse,
+    ExecutiveSummaryRequest,
+    ExecutiveSummaryResponse,
+    TrendInsight,
+    SchoolMetrics,
+)
 
 # Keywords related to school billing management
 ALLOWED_TOPICS = {
@@ -108,22 +123,6 @@ OFF_TOPIC_PATTERNS = [
     r"fútbol",
     r"deportes",
 ]
-
-from src.config import settings
-from src.ai.schemas import (
-    RiskLevel,
-    RiskAnalysisRequest,
-    RiskAnalysisResponse,
-    RiskFactor,
-    CollectionMessageRequest,
-    CollectionMessageResponse,
-    AssistantRequest,
-    AssistantResponse,
-    ExecutiveSummaryRequest,
-    ExecutiveSummaryResponse,
-    TrendInsight,
-    SchoolMetrics,
-)
 
 
 class CollectionAgent:

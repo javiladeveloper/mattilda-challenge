@@ -30,7 +30,7 @@ class GradeRepository(BaseRepository[Grade]):
         query = select(Grade).where(
             Grade.school_id == school_id,
             Grade.name == name,
-            Grade.is_active == True,
+            Grade.is_active.is_(True),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
