@@ -5,15 +5,6 @@ from datetime import date
 from httpx import AsyncClient
 
 
-async def create_grade_for_school(auth_client: AsyncClient, school_id: str, name: str = "Test Grade") -> str:
-    """Helper to create a grade for a school."""
-    response = await auth_client.post(
-        "/api/v1/grades",
-        json={"name": name, "monthly_fee": 500.00, "school_id": school_id},
-    )
-    return response.json()["id"]
-
-
 class TestSchoolStatement:
     """Test School account statement endpoint."""
 
@@ -38,21 +29,15 @@ class TestSchoolStatement:
     @pytest.mark.asyncio
     async def test_school_statement_with_data(self, auth_client: AsyncClient):
         """Test statement for school with students and invoices."""
-        # Create school
         school = await auth_client.post("/api/v1/schools", json={"name": "Full Statement School"})
         school_id = school.json()["id"]
 
-        # Create grade
-        grade_id = await create_grade_for_school(auth_client, school_id)
-
-        # Create student
         student = await auth_client.post(
             "/api/v1/students",
-            json={"first_name": "Test", "last_name": "Student", "school_id": school_id, "grade_id": grade_id},
+            json={"first_name": "Test", "last_name": "Student", "school_id": school_id},
         )
         student_id = student.json()["id"]
 
-        # Create invoices
         await auth_client.post(
             "/api/v1/invoices",
             json={
@@ -70,7 +55,6 @@ class TestSchoolStatement:
             },
         )
 
-        # Make a payment
         await auth_client.post(
             "/api/v1/payments",
             json={
@@ -100,7 +84,6 @@ class TestStudentStatement:
         """Test statement for student with no invoices."""
         school = await auth_client.post("/api/v1/schools", json={"name": "Statement School"})
         school_id = school.json()["id"]
-        grade_id = await create_grade_for_school(auth_client, school_id)
 
         student = await auth_client.post(
             "/api/v1/students",
@@ -108,7 +91,6 @@ class TestStudentStatement:
                 "first_name": "No",
                 "last_name": "Invoices",
                 "school_id": school_id,
-                "grade_id": grade_id,
             },
         )
         student_id = student.json()["id"]
@@ -127,7 +109,6 @@ class TestStudentStatement:
         """Test statement showing invoices and payments."""
         school = await auth_client.post("/api/v1/schools", json={"name": "Pay School"})
         school_id = school.json()["id"]
-        grade_id = await create_grade_for_school(auth_client, school_id)
 
         student = await auth_client.post(
             "/api/v1/students",
@@ -135,12 +116,10 @@ class TestStudentStatement:
                 "first_name": "Paying",
                 "last_name": "Student",
                 "school_id": school_id,
-                "grade_id": grade_id,
             },
         )
         student_id = student.json()["id"]
 
-        # Create invoice
         invoice = await auth_client.post(
             "/api/v1/invoices",
             json={
@@ -152,7 +131,6 @@ class TestStudentStatement:
         )
         invoice_id = invoice.json()["id"]
 
-        # Make payments
         await auth_client.post(
             "/api/v1/payments",
             json={"invoice_id": invoice_id, "amount": 400.00, "method": "CASH"},
@@ -170,7 +148,6 @@ class TestStudentStatement:
         assert float(data["summary"]["total_paid"]) == 700.00
         assert float(data["summary"]["total_pending"]) == 300.00
 
-        # Check invoice has payments
         invoice_data = data["invoices"][0]
         assert len(invoice_data["payments"]) == 2
         assert float(invoice_data["paid_amount"]) == 700.00

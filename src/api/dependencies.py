@@ -1,50 +1,57 @@
 from typing import AsyncGenerator
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.infrastructure.database.connection import get_db
+from src.domain.event_dispatcher import DomainEventDispatcher
+from src.domain.events import DomainEvent, InvoicePaid, InvoiceCancelled, InvoiceOverdue
+from src.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
+from src.infrastructure.event_handlers import AuditLogHandler, InvoiceEventHandler
 from src.application.services import (
     SchoolService,
     StudentService,
     InvoiceService,
     PaymentService,
-    GradeService,
-    BillingItemService,
 )
 
 
+def _create_event_dispatcher() -> DomainEventDispatcher:
+    dispatcher = DomainEventDispatcher()
+    dispatcher.register(DomainEvent, AuditLogHandler())
+    invoice_handler = InvoiceEventHandler()
+    dispatcher.register(InvoiceOverdue, invoice_handler)
+    dispatcher.register(InvoicePaid, invoice_handler)
+    dispatcher.register(InvoiceCancelled, invoice_handler)
+    return dispatcher
+
+
+_dispatcher = _create_event_dispatcher()
+
+
+async def get_unit_of_work() -> AsyncGenerator[SqlAlchemyUnitOfWork, None]:
+    uow = SqlAlchemyUnitOfWork(event_dispatcher=_dispatcher)
+    async with uow:
+        yield uow
+
+
 async def get_school_service(
-    db: AsyncSession = Depends(get_db),
-) -> AsyncGenerator[SchoolService, None]:
-    yield SchoolService(db)
+    uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
+) -> SchoolService:
+    return SchoolService(uow)
 
 
 async def get_student_service(
-    db: AsyncSession = Depends(get_db),
-) -> AsyncGenerator[StudentService, None]:
-    yield StudentService(db)
+    uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
+) -> StudentService:
+    return StudentService(uow)
 
 
 async def get_invoice_service(
-    db: AsyncSession = Depends(get_db),
-) -> AsyncGenerator[InvoiceService, None]:
-    yield InvoiceService(db)
+    uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
+) -> InvoiceService:
+    return InvoiceService(uow)
 
 
 async def get_payment_service(
-    db: AsyncSession = Depends(get_db),
-) -> AsyncGenerator[PaymentService, None]:
-    yield PaymentService(db)
-
-
-async def get_grade_service(
-    db: AsyncSession = Depends(get_db),
-) -> AsyncGenerator[GradeService, None]:
-    yield GradeService(db)
-
-
-async def get_billing_item_service(
-    db: AsyncSession = Depends(get_db),
-) -> AsyncGenerator[BillingItemService, None]:
-    yield BillingItemService(db)
+    uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
+) -> PaymentService:
+    return PaymentService(uow)

@@ -24,8 +24,12 @@ class SchoolUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class SchoolResponse(SchoolBase):
+class SchoolResponse(BaseModel):
     id: UUID
+    name: str
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -10,6 +10,8 @@ from src.main import app
 from src.infrastructure.database.models import Base
 from src.infrastructure.database.models_user import User
 from src.infrastructure.database.connection import get_db
+from src.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
+from src.api.dependencies import get_unit_of_work
 from src.api.auth.jwt import create_access_token, get_password_hash
 
 # Test database URL
@@ -53,7 +55,14 @@ async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
+async def override_get_unit_of_work() -> AsyncGenerator[SqlAlchemyUnitOfWork, None]:
+    uow = SqlAlchemyUnitOfWork(session_factory=TestSessionLocal)
+    async with uow:
+        yield uow
+
+
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[get_unit_of_work] = override_get_unit_of_work
 
 
 @pytest.fixture

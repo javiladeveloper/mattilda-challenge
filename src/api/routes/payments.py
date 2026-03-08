@@ -86,7 +86,6 @@ async def list_invoice_payments(
     payment_service: PaymentService = Depends(get_payment_service),
     _current_user: TokenData = Depends(require_auth),
 ):
-    # Verify invoice exists
     try:
         await invoice_service.get_by_id(invoice_id)
     except EntityNotFoundError as e:

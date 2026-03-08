@@ -12,6 +12,7 @@ from src.infrastructure.logging import setup_logging, get_logger
 setup_logging()
 logger = get_logger("main")
 
+
 app = FastAPI(
     title=settings.project_name,
     version=settings.project_version,
