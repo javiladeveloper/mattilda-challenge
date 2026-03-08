@@ -10,15 +10,9 @@ class TestPaymentsCRUD:
 
     @pytest.fixture
     async def invoice_id(self, auth_client: AsyncClient) -> str:
-        """Create school, grade, student, and invoice. Return invoice ID."""
+        """Create school, student, and invoice. Return invoice ID."""
         school = await auth_client.post("/api/v1/schools", json={"name": "Payment Test School"})
         school_id = school.json()["id"]
-
-        grade = await auth_client.post(
-            "/api/v1/grades",
-            json={"name": "Test Grade", "monthly_fee": 500.00, "school_id": school_id},
-        )
-        grade_id = grade.json()["id"]
 
         student = await auth_client.post(
             "/api/v1/students",
@@ -26,7 +20,6 @@ class TestPaymentsCRUD:
                 "first_name": "Payment",
                 "last_name": "Student",
                 "school_id": school_id,
-                "grade_id": grade_id,
             },
         )
         student_id = student.json()["id"]
@@ -101,19 +94,13 @@ class TestPaymentsCRUD:
     @pytest.mark.asyncio
     async def test_cannot_pay_cancelled_invoice(self, auth_client: AsyncClient):
         """Test that payment to cancelled invoice fails."""
-        # Create a new school, grade, student and invoice, then cancel it
+        # Create a new school, student and invoice, then cancel it
         school = await auth_client.post("/api/v1/schools", json={"name": "Cancel Test"})
         school_id = school.json()["id"]
 
-        grade = await auth_client.post(
-            "/api/v1/grades",
-            json={"name": "Cancel Grade", "monthly_fee": 500.00, "school_id": school_id},
-        )
-        grade_id = grade.json()["id"]
-
         student = await auth_client.post(
             "/api/v1/students",
-            json={"first_name": "A", "last_name": "B", "school_id": school_id, "grade_id": grade_id},
+            json={"first_name": "A", "last_name": "B", "school_id": school_id},
         )
         invoice = await auth_client.post(
             "/api/v1/invoices",

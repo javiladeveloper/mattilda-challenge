@@ -1,160 +1,182 @@
-"""Unit tests for Invoice Service business logic."""
+"""Unit tests for Invoice business logic through domain entities.
+
+These tests exercise the Invoice aggregate root and its invariants,
+ensuring business rules are enforced by the domain model itself.
+"""
 
 import pytest
 from decimal import Decimal
 from datetime import date, timedelta
 from uuid import uuid4
 
+from src.domain.entities.invoice import Invoice, Payment
 from src.domain.enums import InvoiceStatus, PaymentMethod
 from src.domain.exceptions import (
-    EntityNotFoundError,
+    BusinessRuleError,
     PaymentExceedsDebtError,
     InvoiceCancelledError,
 )
 
 
+def _make_invoice(
+    amount=500,
+    due_date=None,
+    status=InvoiceStatus.PENDING,
+    payments=None,
+):
+    return Invoice(
+        student_id=uuid4(),
+        amount=amount,
+        due_date=due_date or date.today() + timedelta(days=30),
+        description="Test invoice",
+        status=status,
+        payments=payments,
+    )
+
+
 class TestInvoiceStatusCalculation:
-    """Test invoice status calculation based on payments."""
+    """Invoice status transitions driven by record_payment()."""
 
-    def test_invoice_status_pending_when_no_payments(self):
-        """Invoice should be PENDING when no payments made."""
-        # Given an invoice amount
-        amount = Decimal("500.00")
-        paid = Decimal("0.00")
+    def test_pending_when_no_payments(self):
+        inv = _make_invoice()
+        assert inv.status == InvoiceStatus.PENDING
+        assert inv.paid_amount == Decimal("0")
+        assert inv.pending_amount == Decimal("500")
 
-        # When calculating status
-        if paid >= amount:
-            status = InvoiceStatus.PAID
-        elif paid > 0:
-            status = InvoiceStatus.PARTIAL
-        else:
-            status = InvoiceStatus.PENDING
+    def test_partial_after_partial_payment(self):
+        inv = _make_invoice(amount=500)
+        inv.record_payment(200, PaymentMethod.CASH)
 
-        # Then status should be PENDING
-        assert status == InvoiceStatus.PENDING
+        assert inv.status == InvoiceStatus.PARTIAL
+        assert inv.paid_amount == Decimal("200")
+        assert inv.pending_amount == Decimal("300")
 
-    def test_invoice_status_partial_when_partially_paid(self):
-        """Invoice should be PARTIAL when partially paid."""
-        amount = Decimal("500.00")
-        paid = Decimal("200.00")
+    def test_paid_after_full_payment(self):
+        inv = _make_invoice(amount=500)
+        inv.record_payment(500, PaymentMethod.BANK_TRANSFER)
 
-        if paid >= amount:
-            status = InvoiceStatus.PAID
-        elif paid > 0:
-            status = InvoiceStatus.PARTIAL
-        else:
-            status = InvoiceStatus.PENDING
+        assert inv.status == InvoiceStatus.PAID
+        assert inv.paid_amount == Decimal("500")
+        assert inv.pending_amount == Decimal("0")
 
-        assert status == InvoiceStatus.PARTIAL
+    def test_paid_after_multiple_payments(self):
+        inv = _make_invoice(amount=500)
+        inv.record_payment(200, PaymentMethod.CASH)
+        inv.record_payment(300, PaymentMethod.CREDIT_CARD)
 
-    def test_invoice_status_paid_when_fully_paid(self):
-        """Invoice should be PAID when fully paid."""
-        amount = Decimal("500.00")
-        paid = Decimal("500.00")
+        assert inv.status == InvoiceStatus.PAID
+        assert len(inv.payments) == 2
 
-        if paid >= amount:
-            status = InvoiceStatus.PAID
-        elif paid > 0:
-            status = InvoiceStatus.PARTIAL
-        else:
-            status = InvoiceStatus.PENDING
-
-        assert status == InvoiceStatus.PAID
-
-    def test_invoice_status_paid_when_overpaid(self):
-        """Invoice should be PAID even if overpaid (edge case)."""
-        amount = Decimal("500.00")
-        paid = Decimal("550.00")
-
-        if paid >= amount:
-            status = InvoiceStatus.PAID
-        elif paid > 0:
-            status = InvoiceStatus.PARTIAL
-        else:
-            status = InvoiceStatus.PENDING
-
-        assert status == InvoiceStatus.PAID
+    def test_overdue_status_on_past_due_date(self):
+        inv = _make_invoice(due_date=date.today() - timedelta(days=5))
+        inv.mark_overdue()
+        assert inv.status == InvoiceStatus.OVERDUE
 
 
 class TestPaymentValidation:
-    """Test payment validation rules."""
+    """Aggregate-enforced payment invariants."""
 
-    def test_payment_cannot_exceed_pending_amount(self):
-        """Payment amount cannot exceed pending amount."""
-        pending = Decimal("300.00")
-        payment_amount = Decimal("400.00")
-
+    def test_payment_cannot_exceed_pending(self):
+        inv = _make_invoice(amount=300)
         with pytest.raises(PaymentExceedsDebtError):
-            if payment_amount > pending:
-                raise PaymentExceedsDebtError(float(payment_amount), float(pending))
+            inv.record_payment(400, PaymentMethod.CASH)
 
     def test_payment_equal_to_pending_is_valid(self):
-        """Payment equal to pending amount is valid."""
-        pending = Decimal("300.00")
-        payment_amount = Decimal("300.00")
-
-        # Should not raise
-        is_valid = payment_amount <= pending
-        assert is_valid is True
-
-    def test_payment_less_than_pending_is_valid(self):
-        """Payment less than pending amount is valid."""
-        pending = Decimal("300.00")
-        payment_amount = Decimal("100.00")
-
-        is_valid = payment_amount <= pending
-        assert is_valid is True
+        inv = _make_invoice(amount=300)
+        payment = inv.record_payment(300, PaymentMethod.CASH)
+        assert payment.amount == Decimal("300")
 
     def test_cannot_pay_cancelled_invoice(self):
-        """Cannot process payment for cancelled invoice."""
-        invoice_id = uuid4()
-        invoice_status = InvoiceStatus.CANCELLED
-
+        inv = _make_invoice()
+        inv.cancel()
         with pytest.raises(InvoiceCancelledError):
-            if invoice_status == InvoiceStatus.CANCELLED:
-                raise InvoiceCancelledError(invoice_id)
+            inv.record_payment(100, PaymentMethod.CASH)
+
+    def test_record_payment_returns_payment_entity(self):
+        inv = _make_invoice(amount=500)
+        payment = inv.record_payment(100, PaymentMethod.CASH, reference="REF-001")
+
+        assert isinstance(payment, Payment)
+        assert payment.invoice_id == inv.id
+        assert payment.amount == Decimal("100")
+        assert payment.method == PaymentMethod.CASH
+        assert payment.reference == "REF-001"
+
+
+class TestInvoiceCancellation:
+    """Cancellation business rules."""
+
+    def test_cancel_pending_invoice(self):
+        inv = _make_invoice()
+        inv.cancel()
+        assert inv.status == InvoiceStatus.CANCELLED
+
+    def test_cannot_cancel_with_payments(self):
+        inv = _make_invoice(amount=500)
+        inv.record_payment(100, PaymentMethod.CASH)
+        with pytest.raises(BusinessRuleError, match="payments"):
+            inv.cancel()
+
+    def test_cannot_cancel_already_cancelled(self):
+        inv = _make_invoice()
+        inv.cancel()
+        with pytest.raises(BusinessRuleError, match="already cancelled"):
+            inv.cancel()
+
+
+class TestInvoiceUpdateDetails:
+    """update_details() invariant protection."""
+
+    def test_update_amount(self):
+        inv = _make_invoice(amount=500)
+        inv.update_details(amount=700)
+        assert inv.amount == Decimal("700")
+
+    def test_cannot_reduce_below_paid(self):
+        inv = _make_invoice(amount=500)
+        inv.record_payment(300, PaymentMethod.CASH)
+        with pytest.raises(BusinessRuleError, match="paid amount"):
+            inv.update_details(amount=200)
+
+    def test_cannot_update_cancelled(self):
+        inv = _make_invoice()
+        inv.cancel()
+        with pytest.raises(BusinessRuleError, match="cancelled"):
+            inv.update_details(description="new desc")
+
+    def test_update_due_date(self):
+        inv = _make_invoice()
+        new_date = date.today() + timedelta(days=60)
+        inv.update_details(due_date=new_date)
+        assert inv.due_date == new_date
 
 
 class TestFinancialCalculations:
-    """Test financial calculation logic."""
-
-    def test_pending_amount_calculation(self):
-        """Test pending amount = total - paid."""
-        total = Decimal("1000.00")
-        paid = Decimal("350.00")
-        expected_pending = Decimal("650.00")
-
-        pending = total - paid
-
-        assert pending == expected_pending
+    """Cross-invoice financial aggregations using domain entities."""
 
     def test_total_debt_across_invoices(self):
-        """Test total debt calculation across multiple invoices."""
         invoices = [
-            {"amount": Decimal("500.00"), "paid": Decimal("500.00")},  # PAID
-            {"amount": Decimal("750.00"), "paid": Decimal("200.00")},  # PARTIAL
-            {"amount": Decimal("600.00"), "paid": Decimal("0.00")},    # PENDING
+            _make_invoice(amount=500),   # pending 500
+            _make_invoice(amount=750),   # will be partial
+            _make_invoice(amount=600),   # pending 600
         ]
+        invoices[0].record_payment(500, PaymentMethod.CASH)
+        invoices[1].record_payment(200, PaymentMethod.CASH)
 
-        total_pending = sum(
-            inv["amount"] - inv["paid"] for inv in invoices
-        )
+        total_pending = sum(inv.pending_amount for inv in invoices)
+        assert total_pending == Decimal("1150")
 
-        assert total_pending == Decimal("1150.00")
+    def test_mark_overdue(self):
+        inv = _make_invoice(due_date=date.today() - timedelta(days=10))
+        inv.mark_overdue()
+        assert inv.status == InvoiceStatus.OVERDUE
 
-    def test_overdue_detection(self):
-        """Test overdue invoice detection."""
-        today = date.today()
-        due_date_past = today - timedelta(days=10)
-        due_date_future = today + timedelta(days=10)
-        status_pending = InvoiceStatus.PENDING
+        events = [e for e in inv.domain_events if e.__class__.__name__ == "InvoiceOverdue"]
+        assert len(events) == 1
+        assert events[0].days_overdue == 10
 
-        is_overdue_past = due_date_past < today and status_pending in [
-            InvoiceStatus.PENDING, InvoiceStatus.PARTIAL
-        ]
-        is_overdue_future = due_date_future < today and status_pending in [
-            InvoiceStatus.PENDING, InvoiceStatus.PARTIAL
-        ]
-
-        assert is_overdue_past is True
-        assert is_overdue_future is False
+    def test_mark_overdue_no_op_for_paid(self):
+        inv = _make_invoice(amount=100)
+        inv.record_payment(100, PaymentMethod.CASH)
+        inv.mark_overdue()
+        assert inv.status == InvoiceStatus.PAID

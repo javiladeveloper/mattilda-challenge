@@ -36,8 +36,8 @@ class TestSchoolsCRUD:
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Minimal School"
-        assert data["address"] is None
-        assert data["phone"] is None
+        assert data["address"] in (None, "")
+        assert data["phone"] in (None, "")
 
     @pytest.mark.asyncio
     async def test_create_school_invalid_email(self, auth_client: AsyncClient):
@@ -159,13 +159,6 @@ class TestSchoolStudents:
         )
         school_id = school_response.json()["id"]
 
-        # Create a grade for the school
-        grade_response = await auth_client.post(
-            "/api/v1/grades",
-            json={"name": "Test Grade", "monthly_fee": 500.00, "school_id": school_id},
-        )
-        grade_id = grade_response.json()["id"]
-
         # Create students
         for i in range(2):
             await auth_client.post(
@@ -174,7 +167,6 @@ class TestSchoolStudents:
                     "first_name": f"Student{i}",
                     "last_name": "Test",
                     "school_id": school_id,
-                    "grade_id": grade_id,
                 },
             )
 

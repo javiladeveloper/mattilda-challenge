@@ -1,19 +1,15 @@
 from typing import List
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.infrastructure.database.models import Invoice
-from src.infrastructure.database.repositories import InvoiceRepository, StudentRepository
+from src.domain.entities.invoice import Invoice
+from src.domain.interfaces.unit_of_work import UnitOfWork
 from src.domain.exceptions import EntityNotFoundError
 from src.domain.enums import InvoiceStatus
 
 
 class InvoiceService:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-        self.repo = InvoiceRepository(session)
-        self.student_repo = StudentRepository(session)
+    def __init__(self, uow: UnitOfWork):
+        self._uow = uow
 
     async def get_all(
         self,
@@ -24,41 +20,63 @@ class InvoiceService:
         status: InvoiceStatus = None,
     ) -> List[Invoice]:
         if student_id:
-            return await self.repo.get_by_student(student_id, skip=skip, limit=limit, status=status)
+            return await self._uow.invoices.get_by_student(
+                student_id, skip=skip, limit=limit, status=status
+            )
         if school_id:
-            return await self.repo.get_by_school(school_id, skip=skip, limit=limit, status=status)
+            return await self._uow.invoices.get_by_school(
+                school_id, skip=skip, limit=limit, status=status
+            )
         filters = {"status": status} if status else None
-        return await self.repo.get_all(skip=skip, limit=limit, filters=filters)
+        return await self._uow.invoices.get_all(skip=skip, limit=limit, filters=filters)
 
     async def get_by_id(self, invoice_id: UUID) -> Invoice:
-        invoice = await self.repo.get_with_payments(invoice_id)
+        invoice = await self._uow.invoices.get_with_payments(invoice_id)
         if not invoice:
             raise EntityNotFoundError("Invoice", invoice_id)
         return invoice
 
     async def create(self, data: dict) -> Invoice:
-        # Verify student exists
-        student = await self.student_repo.get_by_id(data.get("student_id"))
+        student = await self._uow.students.get_by_id(data.get("student_id"))
         if not student:
             raise EntityNotFoundError("Student", data.get("student_id"))
 
-        # Set default status if not provided
-        if "status" not in data:
-            data["status"] = InvoiceStatus.PENDING
-
-        return await self.repo.create(data)
+        invoice = Invoice(
+            student_id=data["student_id"],
+            amount=data["amount"],
+            due_date=data["due_date"],
+            description=data.get("description", ""),
+        )
+        saved = await self._uow.invoices.save(invoice)
+        self._uow.track(invoice)
+        await self._uow.commit()
+        return saved
 
     async def update(self, invoice_id: UUID, data: dict) -> Invoice:
-        invoice = await self.repo.update(invoice_id, data)
+        invoice = await self._uow.invoices.get_with_payments(invoice_id)
         if not invoice:
             raise EntityNotFoundError("Invoice", invoice_id)
-        return invoice
+
+        invoice.update_details(
+            amount=data.get("amount"),
+            due_date=data.get("due_date"),
+            description=data.get("description"),
+        )
+
+        saved = await self._uow.invoices.save(invoice)
+        self._uow.track(invoice)
+        await self._uow.commit()
+        return saved
 
     async def cancel(self, invoice_id: UUID) -> Invoice:
-        invoice = await self.repo.update(invoice_id, {"status": InvoiceStatus.CANCELLED})
+        invoice = await self._uow.invoices.get_with_payments(invoice_id)
         if not invoice:
             raise EntityNotFoundError("Invoice", invoice_id)
-        return invoice
+        invoice.cancel()
+        saved = await self._uow.invoices.save(invoice)
+        self._uow.track(invoice)
+        await self._uow.commit()
+        return saved
 
     async def count(
         self, student_id: UUID = None, school_id: UUID = None, status: InvoiceStatus = None
@@ -66,30 +84,14 @@ class InvoiceService:
         filters = {}
         if student_id:
             filters["student_id"] = student_id
+        if school_id:
+            filters["school_id"] = school_id
         if status:
             filters["status"] = status
-        return await self.repo.count(filters if filters else None)
+        return await self._uow.invoices.count(filters if filters else None)
 
     async def update_overdue_invoices(self) -> int:
-        return await self.repo.update_overdue_status()
+        return await self._uow.invoices.update_overdue_status()
 
-    async def update_invoice_status(self, invoice: Invoice) -> Invoice:
-        if invoice.status == InvoiceStatus.CANCELLED:
-            return invoice
-
-        paid = invoice.paid_amount
-        total = invoice.amount
-
-        if paid >= total:
-            invoice.status = InvoiceStatus.PAID
-        elif paid > 0:
-            invoice.status = InvoiceStatus.PARTIAL
-        else:
-            invoice.status = InvoiceStatus.PENDING
-
-        await self.session.flush()
-        return invoice
-
-    async def get_overdue_by_school(self, school_id: UUID, limit: int = 50) -> List[Invoice]:
-        """Get overdue invoices for a school with student details."""
-        return await self.repo.get_overdue_by_school(school_id, limit=limit)
+    async def get_overdue_by_school(self, school_id: UUID, limit: int = 50) -> list[dict]:
+        return await self._uow.invoices.get_overdue_by_school(school_id, limit=limit)

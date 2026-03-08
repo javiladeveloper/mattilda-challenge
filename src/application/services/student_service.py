@@ -1,16 +1,11 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import List
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.infrastructure.database.models import Student
-from src.infrastructure.database.repositories import (
-    StudentRepository,
-    SchoolRepository,
-    GradeRepository,
-)
-from src.domain.exceptions import EntityNotFoundError, BusinessRuleError
+from src.domain.entities.student import Student
+from src.domain.interfaces.unit_of_work import UnitOfWork
+from src.domain.exceptions import EntityNotFoundError
 from src.domain.enums import InvoiceStatus
 from src.application.dto.statements import (
     StudentStatementDTO,
@@ -21,87 +16,61 @@ from src.application.dto.statements import (
 
 
 class StudentService:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-        self.repo = StudentRepository(session)
-        self.school_repo = SchoolRepository(session)
-        self.grade_repo = GradeRepository(session)
+    def __init__(self, uow: UnitOfWork):
+        self._uow = uow
 
     async def get_all(
         self, skip: int = 0, limit: int = 100, school_id: UUID = None, active_only: bool = False
     ) -> List[Student]:
         if school_id:
-            return await self.repo.get_by_school(
+            return await self._uow.students.get_by_school(
                 school_id, skip=skip, limit=limit, active_only=active_only
             )
         filters = {"is_active": True} if active_only else None
-        return await self.repo.get_all(skip=skip, limit=limit, filters=filters)
+        return await self._uow.students.get_all(skip=skip, limit=limit, filters=filters)
 
     async def get_by_id(self, student_id: UUID) -> Student:
-        student = await self.repo.get_by_id(student_id)
-        if not student:
-            raise EntityNotFoundError("Student", student_id)
-        return student
-
-    async def get_with_invoices(self, student_id: UUID) -> Student:
-        """Get student with all invoices and payments loaded."""
-        student = await self.repo.get_with_invoices(student_id)
+        student = await self._uow.students.get_by_id(student_id)
         if not student:
             raise EntityNotFoundError("Student", student_id)
         return student
 
     async def create(self, data: dict) -> Student:
-        school_id = data.get("school_id")
-        grade_id = data.get("grade_id")
-
-        # Verify school exists
-        school = await self.school_repo.get_by_id(school_id)
+        school = await self._uow.schools.get_by_id(data.get("school_id"))
         if not school:
-            raise EntityNotFoundError("School", school_id)
+            raise EntityNotFoundError("School", data.get("school_id"))
 
-        # Verify grade exists and belongs to the same school
-        if grade_id:
-            grade = await self.grade_repo.get_by_id(grade_id)
-            if not grade:
-                raise EntityNotFoundError("Grade", grade_id)
-            if grade.school_id != school_id:
-                raise BusinessRuleError(f"Grade {grade_id} does not belong to school {school_id}")
-
-        return await self.repo.create(data)
+        student = Student(**data)
+        saved = await self._uow.students.save(student)
+        self._uow.track(student)
+        await self._uow.commit()
+        return saved
 
     async def update(self, student_id: UUID, data: dict) -> Student:
-        # Get current student to check school
-        current_student = await self.repo.get_by_id(student_id)
-        if not current_student:
-            raise EntityNotFoundError("Student", student_id)
-
-        # Determine the school_id (new one if updating, or existing one)
-        school_id = data.get("school_id", current_student.school_id)
-
-        # If school_id is being updated, verify new school exists
-        if "school_id" in data:
-            school = await self.school_repo.get_by_id(school_id)
-            if not school:
-                raise EntityNotFoundError("School", school_id)
-
-        # If grade_id is being updated, verify it exists and belongs to the school
-        if "grade_id" in data and data["grade_id"] is not None:
-            grade = await self.grade_repo.get_by_id(data["grade_id"])
-            if not grade:
-                raise EntityNotFoundError("Grade", data["grade_id"])
-            if grade.school_id != school_id:
-                raise BusinessRuleError(
-                    f"Grade {data['grade_id']} does not belong to school {school_id}"
-                )
-
-        student = await self.repo.update(student_id, data)
-        return student
-
-    async def delete(self, student_id: UUID) -> Student:
-        student = await self.repo.soft_delete(student_id)
+        student = await self._uow.students.get_by_id(student_id)
         if not student:
             raise EntityNotFoundError("Student", student_id)
-        return student
+
+        if "school_id" in data:
+            school = await self._uow.schools.get_by_id(data["school_id"])
+            if not school:
+                raise EntityNotFoundError("School", data["school_id"])
+
+        student.update(**data)
+        saved = await self._uow.students.save(student)
+        self._uow.track(student)
+        await self._uow.commit()
+        return saved
+
+    async def delete(self, student_id: UUID) -> Student:
+        student = await self._uow.students.get_by_id(student_id)
+        if not student:
+            raise EntityNotFoundError("Student", student_id)
+        student.deactivate()
+        saved = await self._uow.students.save(student)
+        self._uow.track(student)
+        await self._uow.commit()
+        return saved
 
     async def count(self, school_id: UUID = None, active_only: bool = False) -> int:
         filters = {}
@@ -109,21 +78,36 @@ class StudentService:
             filters["school_id"] = school_id
         if active_only:
             filters["is_active"] = True
-        return await self.repo.count(filters if filters else None)
+        return await self._uow.students.count(filters if filters else None)
 
     async def get_statement(self, student_id: UUID) -> StudentStatementDTO:
-        student = await self.repo.get_with_invoices(student_id)
+        student = await self._uow.students.get_by_id(student_id)
         if not student:
             raise EntityNotFoundError("Student", student_id)
 
-        # Get financials
-        financials = await self.repo.get_student_financials(student_id)
+        await self._uow.invoices.update_overdue_status()
+        await self._uow.commit()
 
-        # Build invoice summaries with payments
+        school = await self._uow.schools.get_by_id(student.school_id)
+        invoices = await self._uow.invoices.get_by_student(student_id, limit=1000)
+
+        total_invoiced = Decimal("0")
+        total_paid = Decimal("0")
+        total_pending = Decimal("0")
+        total_overdue = Decimal("0")
+
         invoice_summaries = []
-        for inv in student.invoices:
+        for inv in invoices:
             if inv.status == InvoiceStatus.CANCELLED:
                 continue
+
+            total_invoiced += inv.amount
+            total_paid += inv.paid_amount
+
+            if inv.status == InvoiceStatus.OVERDUE:
+                total_overdue += inv.pending_amount
+            elif inv.status in (InvoiceStatus.PENDING, InvoiceStatus.PARTIAL):
+                total_pending += inv.pending_amount
 
             payments = [
                 PaymentSummaryDTO(
@@ -147,17 +131,15 @@ class StudentService:
                 )
             )
 
-        school_name = student.school.name if student.school else "Unknown"
-
         return StudentStatementDTO(
             student_id=student.id,
             student_name=student.full_name,
-            school_name=school_name,
+            school_name=school.name if school else "Unknown",
             summary=FinancialSummaryDTO(
-                total_invoiced=financials["total_invoiced"],
-                total_paid=financials["total_paid"],
-                total_pending=financials["total_pending"],
-                total_overdue=financials["total_overdue"],
+                total_invoiced=total_invoiced,
+                total_paid=total_paid,
+                total_pending=total_pending,
+                total_overdue=total_overdue,
             ),
             invoices=invoice_summaries,
             generated_at=datetime.utcnow(),

@@ -38,7 +38,7 @@ async def list_invoices(
         school_id=school_id,
         status=invoice_status,
     )
-    total = await service.count(student_id=student_id, status=invoice_status)
+    total = await service.count(student_id=student_id, school_id=school_id, status=invoice_status)
     pages = math.ceil(total / page_size) if total > 0 else 1
 
     return InvoiceListResponse(
